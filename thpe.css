@@ -1,0 +1,43 @@
+.red {
+  color: red;
+}
+.blue {
+  color: #006ab2;
+}
+.cyan {
+  color: #009de0;
+}
+.gray {
+  color: #717778;
+}
+.neongreen {
+  color: #69af22;
+}
+.orange {
+  color: #ee7f00;
+}
+.darkred {
+  color: #93107d;
+}
+
+
+.smallfont {
+  font-size: 70%;
+  line-height: 160%;
+}
+
+
+.bigfont {
+  font-size: 140%;
+  line-height: 160%;
+}
+
+.hugefont {
+  font-size: 200%;
+  line-height: 180%;
+}
+
+.add-space{
+  padding-right: 5%;
+}
+

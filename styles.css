@@ -1,0 +1,106 @@
+<style>
+/* Style global pour RevealJS - marges du haut réduites au maximum */
+
+/* Section principale */
+.reveal .slides section {
+    font-size: 0.9em;
+    padding: 5px 20px 10px 20px; /* Haut réduit à 5px */
+}
+
+/* Titres principaux H1 */
+.reveal .slides section h1 {
+    font-size: 1.98em !important;
+    font-weight: 700;
+    margin: 0.1em 0 0.3em 0; /* Haut réduit à 0.1em */
+    padding: 2px 0;
+    color: #2c3e50;
+    line-height: 1.1;
+}
+
+/* Sous-titres H2 */
+.reveal .slides section h2 {
+    font-size: 1.62em !important;
+    font-weight: 600;
+    margin: 0.05em 0 0.2em 0; /* Haut réduit à 0.05em */
+    padding: 1px 0;
+    color: #34495e;
+    line-height: 1.1;
+}
+
+/* Sous-sous-titres H3 */
+.reveal .slides section h3 {
+    font-size: 1.35em !important;
+    font-weight: 500;
+    margin: 0.02em 0 0.15em 0; /* Haut réduit à 0.02em */
+    padding: 1px 0;
+    color: #5d6d7e;
+    line-height: 1.1;
+}
+
+/* Paragraphes et texte standard */
+.reveal .slides section p {
+    font-size: 0.99em;
+    line-height: 1.2;
+    margin: 0.1em 0 0.3em 0; /* Haut réduit à 0.1em */
+    padding: 1px 0;
+    color: #2c3e50;
+}
+
+/* Listes */
+.reveal .slides section ul,
+.reveal .slides section ol {
+    margin: 0.1em 0 0.3em 0; /* Haut réduit à 0.1em */
+    padding-left: 1em;
+}
+
+.reveal .slides section ul li,
+.reveal .slides section ol li {
+    font-size: 0.9em;
+    line-height: 1.1;
+    margin: 0.05em 0 0.1em 0; /* Haut réduit à 0.05em */
+    padding: 0;
+}
+
+/* Textes mathématiques - Formules */
+.reveal .slides section .math {
+    font-size: 1.0em;
+    color: #c0392b;
+    margin: 0.1em 0; /* Haut réduit à 0.1em */
+    padding: 0;
+}
+
+/* Équations mathématiques en display */
+.reveal .slides section .math.display {
+    font-size: 0.8em;
+    margin: 0.15em 0; /* Haut réduit à 0.15em */
+    padding: 0;
+    line-height: 1;
+}
+
+/* Code blocks */
+.reveal .slides section pre {
+    margin: 0.2em 0 0.4em 0; /* Haut réduit à 0.2em */
+    padding: 5px 10px;
+}
+
+/* Conteneurs de code WebR */
+.reveal .slides section .cell {
+    font-size: 0.855em;
+    margin: 0.2em 0 0.4em 0; /* Haut réduit à 0.2em */
+    padding: 2px 0;
+}
+
+/* Sorties de code */
+.reveal .slides section .cell-output {
+    font-size: 0.81em;
+    line-height: 1.1;
+    margin: 0.1em 0 0.3em 0; /* Haut réduit à 0.1em */
+    padding: 4px 6px;
+}
+
+/* Supprimer les marges du haut pour les premiers éléments */
+.reveal .slides section > *:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
+</style>

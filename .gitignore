@@ -1,0 +1,250 @@
+# ====================================
+# R STUDIO & R SPECIFIC
+# ====================================
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Rprofile
+.Renviron
+.Renviron.lock
+*.Rproj
+.Rapp.history
+*.rsas
+*.odc
+
+# Session Data files
+*.Rdata
+*.rda
+*.rds
+
+# R Check files
+/*.Rcheck/
+
+# Example code in package build process
+*-Ex.R
+
+# Output files from R CMD build
+/*.tar.gz
+
+# Output files from R CMD check
+/*.Rcheck/
+
+# RStudio Connect folder
+rsconnect/
+
+# R system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ====================================
+# QUARTO SPECIFIC
+# ====================================
+# Quarto cache and intermediate files
+/.quarto/
+/_freeze
+/_extensions/coatless/.quarto/
+/_extensions/r-wasm/.quarto/
+
+# Quarto notebook files
+**/*.quarto_ipynb
+**/.ipynb_checkpoints/
+
+# Quarto output files (générés automatiquement)
+/docs/
+!docs/.nojekyll  # On garde .nojekyll
+!docs/CNAME      # On garde CNAME si présent
+
+# Quarto temporary files
+*.quarto.*
+.quarto/
+
+# Quarto preview files
+_quarto_preview/
+
+# ====================================
+# WEBR SPECIFIC
+# ====================================
+# WebR cache
+/_extensions/coatless/webr/webr_packages_cache/
+/_extensions/r-wasm/cache/
+
+# WASM files générés
+*.wasm
+*.data
+
+# ====================================
+# OS & EDITOR FILES
+# ====================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+
+# Editor files
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# RStudio
+.Rproj.user/
+*.Rproj
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*#*
+.#*
+\#*#
+.\#*
+
+# ====================================
+# PROJECT BUILD & DEPENDENCIES
+# ====================================
+# Node modules (si vous utilisez des extensions JS)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# LaTeX
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+*.loa
+*.nav
+*.snm
+*.vrb
+*.xdv
+*-concordance.tex
+
+# Knitr/LaTeX
+*.bcf
+*.run.xml
+*-blx.bib
+
+# ====================================
+# NOTEBOOKS & DATA
+# ====================================
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Data files (exemples à adapter)
+#*.csv
+#*.tsv
+#*.xlsx
+#*.xls
+#*.sav
+#*.dta
+#*.sas7bdat
+#*.rdata
+
+# Fichiers temporaires de données
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# ====================================
+# GITHUB & CI/CD
+# ====================================
+# GitHub Actions
+.github/workflows/*.yml.cache
+.github/workflows/*.yml.backup
+
+# CI cache
+.cache/
+.pytest_cache/
+.mypy_cache/
+
+# ====================================
+# CUSTOM (à adapter à votre projet)
+# ====================================
+# Vos fichiers temporaires personnels
+/tmp/
+/temp/
+
+# Fichiers de log
+*.log
+logs/
+
+# Fichiers de configuration locaux
+config.local.*
+.env
+.secrets
+
+# Backup files de votre éditeur
+*~
+\#*\#
+.\#*
+
+# ====================================
+# EXCEPTIONS (fichiers à garder)
+# ====================================
+# On force le suivi de certains fichiers dans docs/
+!docs/.nojekyll
+!docs/CNAME
+!docs/README.md
+!docs/LICENSE
+
+# On garde certains fichiers de configuration
+!.vscode/settings.json.example
+!.env.example
+
+# Fichiers essentiels au projet
+!img/**  # On garde toutes les images
+!R/*.R   # On garde les scripts R

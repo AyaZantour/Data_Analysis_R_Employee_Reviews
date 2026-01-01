@@ -1,0 +1,14 @@
+{{ if pdf }}
+<div class="pdf-download-section" style="margin: 2rem 0; padding: 1.5rem; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #0366d6;">
+  <h3 style="margin-top: 0;">📥 PDF Version</h3>
+  <p>Download a printable PDF version of this document:</p>
+  <a href="{{ replace .File.BaseFileName `.qmd` `.pdf` }}" 
+     class="btn-pdf-download"
+     style="display: inline-block; padding: 10px 20px; background: #2ea44f; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 10px 0;">
+    📄 Download PDF
+  </a>
+  <p style="font-size: 0.9em; color: #666; margin-top: 10px;">
+    <small>Generated with Quarto • Optimized for printing</small>
+  </p>
+</div>
+{{ endif }}

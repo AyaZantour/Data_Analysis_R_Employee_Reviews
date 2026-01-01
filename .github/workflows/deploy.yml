@@ -1,0 +1,355 @@
+name: Deploy Quarto Website - NO JEKYLL
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    env:
+      JEKYLL_ENV: "disabled"
+      DISABLE_JEKYLL: "true"
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove docs directory completely
+        run: |
+          echo "🗑️  SUPPRESSION COMPLÈTE du dossier docs..."
+          rm -rf docs/ _site/ 2>/dev/null || true
+          echo "✅ Nettoyé"
+
+      - name: Setup Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      # CACHE pour Python packages
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        id: cache-pip
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('.github/workflows/deploy.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Python and Jupyter
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install jupyter nbformat ipykernel jupyter-cache
+
+      - name: Setup R for binary packages
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.3'
+
+      # CACHE pour R packages
+      - name: Cache R packages
+        uses: actions/cache@v3
+        id: cache-r
+        with:
+          path: |
+            /usr/local/lib/R/site-library
+            ~/.R/library
+            ~/R/library
+          key: ${{ runner.os }}-r4.3-packages-${{ hashFiles('.github/workflows/deploy.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-r4.3-packages-
+
+      # ÉTAPE CRITIQUE : Installation R depuis BINAIRES SEULEMENT
+      - name: Install R packages FROM BINARIES (NO SOURCE COMPILATION)
+        if: steps.cache-r.outputs.cache-hit != 'true'
+        run: |
+          echo "⚡⚡⚡ INSTALLATION R - BINAIRES UNIQUEMENT ⚡⚡⚡"
+          echo "⚠️  COMPILATION SOURCE : DÉSACTIVÉE"
+          
+          # Configuration AGGRESSIVE pour binaires
+          cat > ~/.Rprofile << 'EOF'
+          # =================================================
+          # CONFIGURATION ULTRA-OPTIMISÉE POUR BINAIRES
+          # =================================================
+          
+          # 1. DÉSACTIVER TOUTE COMPILATION
+          options(
+            # NE JAMAIS compiler depuis les sources
+            install.packages.compile.from.source = "never",
+            # Ne pas vérifier les sources
+            install.packages.check.source = "no",
+            # Installation parallèle maximale
+            Ncpus = 6,
+            # Timeout long pour gros packages
+            timeout = 300,
+            # Options d'installation POUR BINAIRES
+            INSTALL_opts = c(
+              "--no-multiarch",
+              "--no-docs", 
+              "--no-test-load",
+              "--no-byte-compile",
+              "--no-staged-install",
+              "--no-data"
+            )
+          )
+          
+          # 2. UTILISER RSPM POUR BINAIRES UBUNTU 22.04
+          # RStudio Package Manager - binaires pré-compilés
+          ubuntu_codename <- "jammy"  # Ubuntu 22.04
+          rspm_url <- paste0(
+            "https://packagemanager.rstudio.com/cran/__linux__/",
+            ubuntu_codename,
+            "/latest"
+          )
+          
+          # Définir comme dépôt PRINCIPAL
+          options(repos = c(RSPM = rspm_url))
+          
+          cat("\n")
+          cat("=========================================\n")
+          cat("🎯 MODE BINAIRE FORCÉ ACTIVÉ\n")
+          cat("🔧 Dépôt :", rspm_url, "\n")
+          cat("🚫 Compilation source : INTERDITE\n")
+          cat("⚡ Ncpus :", getOption("Ncpus"), "\n")
+          cat("=========================================\n")
+          EOF
+          
+          # VÉRIFIER LA CONFIGURATION
+          echo "🔍 Vérification configuration R..."
+          Rscript -e "
+          cat('\n=== CONFIGURATION ACTIVE ===\n')
+          cat('1. Dépôt      :', getOption('repos')[1], '\n')
+          cat('2. Compilation:', getOption('install.packages.compile.from.source'), '\n')
+          cat('3. Ncpus      :', getOption('Ncpus'), '\n')
+          cat('4. INSTALL_opts:', paste(getOption('INSTALL_opts'), collapse=', '), '\n')
+          cat('=============================\n')
+          "
+          
+          # LISTE DES PACKAGES (optimisée pour vitesse)
+          Rscript -e "
+          start_time <- Sys.time()
+          cat('📦 Début de l\'installation des packages R...\n\n')
+          
+          # Packages par groupe (installation plus stable)
+          groups <- list(
+            'Groupe 1 - Core' = c('rmarkdown', 'knitr'),
+            'Groupe 2 - Tidyverse' = c('dplyr', 'ggplot2', 'tidyr'),
+            'Groupe 3 - Data I/O' = c('readxl', 'lubridate'),
+            'Groupe 4 - Stats' = c('car', 'lmtest', 'gplots')
+          )
+          
+          # Fonction d'installation avec retry
+          install_group <- function(pkgs, group_name, max_retries = 2) {
+            cat('\n---', group_name, '---\n')
+            
+            for (retry in 1:max_retries) {
+              tryCatch({
+                cat('Tentative', retry, ': ', paste(pkgs, collapse=', '), '\n')
+                
+                # Essayer d'abord avec type='binary'
+                result <- tryCatch({
+                  install.packages(pkgs, type = 'binary', quiet = TRUE)
+                  '✅ Binaire'
+                }, error = function(e1) {
+                  # Fallback sans type='binary' mais avec options anti-compilation
+                  install.packages(pkgs, quiet = TRUE)
+                  '⚠️  Standard (fallback)'
+                })
+                
+                cat('Succès :', result, '\n')
+                return(TRUE)
+                
+              }, error = function(e) {
+                if (retry == max_retries) {
+                  cat('❌ Échec après', max_retries, 'tentatives\n')
+                  cat('Erreur :', e$message, '\n')
+                  return(FALSE)
+                }
+                cat('⏱️  Pause de 5 secondes avant réessai...\n')
+                Sys.sleep(5)
+              })
+            }
+          }
+          
+          # Installer chaque groupe
+          for (group_name in names(groups)) {
+            install_group(groups[[group_name]], group_name)
+          }
+          
+          # VÉRIFICATION FINALE
+          cat('\n=== VÉRIFICATION DES INSTALLATIONS ===\n')
+          all_pkgs <- unlist(groups, use.names = FALSE)
+          installed <- rownames(installed.packages())
+          
+          success_count <- 0
+          for (pkg in all_pkgs) {
+            if (pkg %in% installed) {
+              version <- packageVersion(pkg)
+              cat('✓', pkg, 'v', as.character(version), '\n')
+              success_count <- success_count + 1
+            } else {
+              cat('✗', pkg, 'MANQUANT\n')
+            }
+          }
+          
+          end_time <- Sys.time()
+          total_time <- round(difftime(end_time, start_time, units = 'secs'), 1)
+          
+          cat('\n📊 RÉSUMÉ :\n')
+          cat('  Packages :', success_count, '/', length(all_pkgs), '\n')
+          cat('  Temps    :', total_time, 'secondes\n')
+          
+          if (success_count == length(all_pkgs)) {
+            cat('🎯 SUCCÈS COMPLET\n')
+          } else {
+            cat('⚠️  ATTENTION : Certains packages manquent\n')
+          }
+          "
+          
+          echo "✅ Installation R terminée"
+
+      # CACHE pour TinyTeX (partagé avec le workflow PDFs)
+      - name: Cache TinyTeX
+        uses: actions/cache@v3
+        id: cache-tinytex
+        with:
+          path: ~/.TinyTeX
+          key: ${{ runner.os }}-tinytex-shared
+          restore-keys: |
+            ${{ runner.os }}-tinytex-
+
+      # Installer TinyTeX seulement si pas dans le cache
+      - name: Install TinyTeX for LaTeX formulas
+        if: steps.cache-tinytex.outputs.cache-hit != 'true'
+        run: |
+          echo "📄 Installation de TinyTeX pour les formules..."
+          
+          # 1. Installer TinyTeX
+          wget -qO- "https://yihui.org/tinytex/install-unx.sh" | sh
+          
+          # 2. Ajouter au PATH
+          echo "$HOME/.TinyTeX/bin/x86_64-linux" >> $GITHUB_PATH
+          
+          # 3. Attendre que le PATH soit mis à jour
+          export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH"
+          
+          # 4. Mettre à jour tlmgr et installer les packages manquants
+          tlmgr update --self
+          tlmgr install \
+            array \
+            subcaption \
+            booktabs \
+            float \
+            geometry \
+            hyperref \
+            caption \
+            fancyhdr \
+            microtype \
+            wrapfig \
+            amsmath \
+            amsfonts \
+            amssymb \
+            || echo "⚠️ Certains packages déjà installés"
+          
+          # 5. Vérifier l'installation
+          which pdflatex
+          pdflatex --version
+          echo "✅ TinyTeX installé"
+
+      # S'assurer que le PATH TinyTeX est disponible même avec cache
+      - name: Setup LaTeX PATH
+        run: |
+          export PATH="$HOME/.TinyTeX/bin/x86_64-linux:$PATH"
+          echo "$HOME/.TinyTeX/bin/x86_64-linux" >> $GITHUB_PATH
+          echo "🔍 Vérification pdflatex:"
+          which pdflatex || echo "pdflatex pas encore dans PATH"
+
+      # CACHE pour le rendu Quarto
+      - name: Cache Quarto output
+        uses: actions/cache@v3
+        id: cache-quarto
+        with:
+          path: |
+            docs/
+            _freeze/
+            .quarto-cache/
+          key: ${{ runner.os }}-quarto-${{ hashFiles('**/*.qmd', '**/_quarto.yml', '**/*.bib', '**/*.csl') }}
+          restore-keys: |
+            ${{ runner.os }}-quarto-
+
+      - name: Render Quarto website
+        run: |
+          echo "🚀 Rendu du site Quarto..."
+          
+          # Si pas de cache, faire un rendu complet
+          if [ "${{ steps.cache-quarto.outputs.cache-hit }}" != 'true' ]; then
+            echo "📝 Rendu complet nécessaire..."
+            quarto render --no-cache
+          else
+            echo "✅ Utilisation du cache Quarto"
+            # Vérifier que docs/ existe depuis le cache
+            if [ ! -d "docs" ]; then
+              echo "⚠️  Cache présent mais docs/ manquant, rendu complet..."
+              quarto render --no-cache
+            fi
+          fi
+          
+          echo "✅ Rendu terminé"
+
+      # ÉTAPE CRITIQUE : Post-traitement SANS JEKYLL
+      - name: Post-process to ELIMINATE Jekyll
+        run: |
+          echo "🛑 ÉLIMINATION DÉFINITIVE DE JEKYLL..."
+          
+          # S'assurer que docs/ existe
+          if [ ! -d "docs" ]; then
+            echo "❌ ERREUR : docs/ non trouvé après rendu"
+            exit 1
+          fi
+          
+          # 1. CRÉER .nojekyll EXPLICITE
+          echo "# ===========================================" > docs/.nojekyll
+          echo "# JEKYLL COMPLETELY DISABLED" >> docs/.nojekyll
+          echo "# This is a static HTML site" >> docs/.nojekyll
+          echo "# GitHub Pages: DO NOT PROCESS WITH JEKYLL" >> docs/.nojekyll
+          echo "# Generated by Quarto on $(date)" >> docs/.nojekyll
+          echo "# ===========================================" >> docs/.nojekyll
+          
+          # 2. SUPPRIMER TOUS LES FICHIERS .scss/.sass
+          echo "🔪 Suppression des fichiers SCSS/SASS..."
+          scss_files=$(find docs -name "*.scss" -o -name "*.sass" 2>/dev/null | wc -l)
+          echo "Fichiers trouvés: $scss_files"
+          
+          if [ "$scss_files" -gt 0 ]; then
+            find docs -name "*.scss" -type f -delete
+            find docs -name "*.sass" -type f -delete
+            echo "✅ Fichiers supprimés"
+          fi
+          
+          # 3. Renommer index
+          if [ -f "docs/index.qmd.html" ]; then
+            mv docs/index.qmd.html docs/index.html
+            echo "✅ index.qmd.html → index.html"
+          fi
+          
+          # 4. VÉRIFICATION FINALE
+          echo "🔍 VÉRIFICATION FINALE :"
+          echo "  - .nojekyll présent: $(test -f docs/.nojekyll && echo 'OUI' || echo 'NON')"
+          echo "  - Fichiers .scss restants: $(find docs -name '*.scss' 2>/dev/null | wc -l)"
+          echo "  - Fichiers .sass restants: $(find docs -name '*.sass' 2>/dev/null | wc -l)"
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          publish_branch: gh-pages  # Branche standard pour GitHub Pages
+          force_orphan: true
+          keep_files: false
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'

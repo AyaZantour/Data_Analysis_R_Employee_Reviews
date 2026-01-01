@@ -1,0 +1,35 @@
+project:
+  type: default
+  output-dir: docs
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    code-fold: true
+    code-summary: "Voir le code"
+    code-tools: true
+    df-print: paged
+    number-sections: true
+    fig-width: 10
+    fig-height: 6
+    css: styles.css
+    include-in-header:
+      text: |
+        <script>
+        // Custom JavaScript if needed
+        </script>
+
+  pdf:
+    documentclass: article
+    keep-tex: true
+
+execute:
+  echo: true
+  warning: false
+  message: false
+  cache: true
+
+editor: visual

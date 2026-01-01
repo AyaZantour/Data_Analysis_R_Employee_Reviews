@@ -1,0 +1,691 @@
+---
+title: "Analyse des Avis Glassdoor"
+subtitle: "Étude comparative de 5 géants de la Tech"
+author: "Eya Zantour"
+date: today
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    code-fold: true
+    code-summary: "Voir le code"
+    code-tools: true
+    df-print: paged
+    number-sections: true
+    fig-width: 10
+    fig-height: 6
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+  cache: true
+editor: visual
+---
+
+```{r setup, include=FALSE}
+# Configuration globale
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 10,
+  fig.height = 6,
+  fig.path = "outputs/figures/"
+)
+
+# Chargement des packages
+library(tidyverse)
+library(scales)
+library(patchwork)
+library(knitr)
+library(kableExtra)
+library(DT)
+library(here)
+
+# Thème personnalisé
+theme_set(theme_minimal())
+```
+
+# Résumé Exécutif {.unnumbered}
+
+::: {.callout-note icon="false"}
+## 📊 Chiffres Clés
+
+-   **Dataset**: 67,529 avis analysés
+-   **Entreprises**: Amazon, Microsoft, Apple, Google, Facebook
+-   **Période**: 2008-2023
+-   **Note moyenne globale**: 3.83/5 ⭐
+:::
+
+**Objectif**: Analyser la satisfaction des employés dans les géants de la tech et identifier les facteurs clés de réussite et d'amélioration.
+
+------------------------------------------------------------------------
+
+# Introduction
+
+## Contexte
+
+Les avis Glassdoor sont devenus un outil crucial pour les candidats évaluant les employeurs potentiels. Cette analyse examine les perceptions des employés actuels et anciens de 5 entreprises technologiques majeures.
+
+## Questions de Recherche
+
+1.  Quelle entreprise offre la meilleure expérience employé?
+2.  Quelles sont les dimensions de satisfaction les plus critiques?
+3.  Comment les notes évoluent-elles dans le temps?
+4.  Quels sont les points forts et faibles spécifiques à chaque entreprise?
+
+## Méthodologie
+
+```{r load-data}
+# Chargement des données
+# df <- readRDS(here("data", "processed", "employee_reviews_prepared.rds"))
+
+# Chargement des données avec toutes les colonnes
+df <- read_csv(here("data", "raw", "employee_reviews.csv"), 
+               show_col_types = FALSE,
+               col_names = TRUE) %>% 
+  janitor::clean_names() %>%
+  rename(
+    career_opportunities_stars = carrer_opportunities_stars,
+    senior_management_stars = senior_mangemnet_stars
+  ) %>%
+  # Ajouter review_year
+  mutate(
+    review_year = case_when(
+      str_detect(dates, "\\d{4}") ~ as.numeric(str_extract(dates, "\\d{4}")),
+      TRUE ~ NA_real_
+    )
+  )
+
+
+# Aperçu de la structure
+glimpse(df)
+```
+
+------------------------------------------------------------------------
+
+# Analyse Exploratoire
+
+## Vue d'Ensemble du Dataset
+
+```{r dataset-overview}
+# Statistiques descriptives
+overview_stats <- df %>%
+  summarise(
+    total_avis = n(),
+    entreprises = n_distinct(company),
+    annee_min = min(review_year, na.rm = TRUE),
+    annee_max = max(review_year, na.rm = TRUE),
+    note_moyenne = mean(overall_ratings, na.rm = TRUE),
+    note_mediane = median(overall_ratings, na.rm = TRUE)
+  )
+
+overview_stats %>%
+  pivot_longer(everything(), names_to = "Métrique", values_to = "Valeur") %>%
+  kable(caption = "Statistiques descriptives du dataset") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Répartition par Entreprise
+
+```{r company-distribution}
+company_counts <- df %>%
+  count(company, sort = TRUE) %>%
+  mutate(
+    pourcentage = n / sum(n) * 100,
+    pourcentage_fmt = paste0(round(pourcentage, 1), "%")
+  )
+
+# Tableau interactif
+datatable(
+  company_counts,
+  colnames = c("Entreprise", "Nombre d'avis", "Pourcentage", ""),
+  options = list(pageLength = 5, dom = 't'),
+  rownames = FALSE
+)
+```
+
+```{r company-barplot, fig.cap="Répartition des avis par entreprise"}
+company_counts %>%
+  ggplot(aes(x = reorder(company, n), y = n, fill = company)) +
+  geom_col(alpha = 0.8) +
+  geom_text(aes(label = paste0(format(n, big.mark = ","), "\n(", pourcentage_fmt, ")")),
+            hjust = -0.1, size = 3.5) +
+  coord_flip(ylim = c(0, max(company_counts$n) * 1.15)) +
+  scale_y_continuous(labels = comma) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    title = "Volume d'Avis par Entreprise",
+    x = NULL,
+    y = "Nombre d'avis"
+  ) +
+  theme(legend.position = "none")
+```
+
+------------------------------------------------------------------------
+
+# Analyse des Notes Globales
+
+## Distribution des Notes
+
+```{r ratings-distribution, fig.cap="Distribution des notes globales"}
+rating_stats <- df %>%
+  summarise(
+    moyenne = mean(overall_ratings, na.rm = TRUE),
+    mediane = median(overall_ratings, na.rm = TRUE),
+    ecart_type = sd(overall_ratings, na.rm = TRUE)
+  )
+
+df %>%
+  ggplot(aes(x = overall_ratings)) +
+  geom_histogram(binwidth = 0.5, fill = "#3498db", color = "white", alpha = 0.8) +
+  geom_vline(
+    xintercept = rating_stats$moyenne,
+    color = "#e74c3c",
+    linetype = "dashed",
+    linewidth = 1.2
+  ) +
+  annotate(
+    "text",
+    x = rating_stats$moyenne + 0.4,
+    y = Inf,
+    label = paste0("Moyenne: ", round(rating_stats$moyenne, 2)),
+    vjust = 1.5,
+    color = "#e74c3c",
+    fontface = "bold",
+    size = 4
+  ) +
+  scale_x_continuous(breaks = 1:5) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "Distribution des Notes Globales",
+    x = "Note (1-5 étoiles)",
+    y = "Nombre d'avis"
+  )
+```
+
+::: callout-tip
+## 💡 Insight
+
+La distribution est **légèrement asymétrique à gauche** avec une concentration autour de 4 étoiles, suggérant une satisfaction globalement positive mais avec une minorité significative d'avis très négatifs.
+:::
+
+## Catégorisation des Avis
+
+```{r rating-categories}
+df %>%
+  mutate(
+    categorie = case_when(
+      overall_ratings >= 4 ~ "Positif (4-5)",
+      overall_ratings == 3 ~ "Neutre (3)",
+      overall_ratings <= 2 ~ "Négatif (1-2)"
+    )
+  ) %>%
+  count(categorie) %>%
+  mutate(pourcentage = n / sum(n) * 100) %>%
+  ggplot(aes(x = "", y = pourcentage, fill = categorie)) +
+  geom_col(width = 1, alpha = 0.8) +
+  geom_text(
+    aes(label = paste0(round(pourcentage, 1), "%")),
+    position = position_stack(vjust = 0.5),
+    size = 5,
+    fontface = "bold"
+  ) +
+  coord_polar("y") +
+  scale_fill_manual(values = c("#e74c3c", "#95a5a6", "#2ecc71")) +
+  labs(
+    title = "Répartition des Avis par Sentiment",
+    fill = "Catégorie"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+    legend.position = "bottom"
+  )
+```
+
+------------------------------------------------------------------------
+
+# Comparaison Inter-Entreprises
+
+## Classement Général
+
+```{r company-ranking}
+company_stats <- df %>%
+  group_by(company) %>%
+  summarise(
+    n_avis = n(),
+    note_moyenne = mean(overall_ratings, na.rm = TRUE),
+    note_mediane = median(overall_ratings, na.rm = TRUE),
+    ecart_type = sd(overall_ratings, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(note_moyenne))
+
+company_stats %>%
+  mutate(across(where(is.numeric), ~round(.x, 2))) %>%
+  kable(
+    caption = "Statistiques par entreprise (classement par note moyenne)",
+    col.names = c("Entreprise", "N Avis", "Moyenne", "Médiane", "Écart-type")
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  row_spec(1, bold = TRUE, color = "white", background = "#27ae60") %>%
+  row_spec(nrow(company_stats), bold = TRUE, color = "white", background = "#e74c3c")
+```
+
+```{r company-comparison-plot, fig.width=12, fig.cap="Comparaison des entreprises avec intervalles de confiance"}
+# company_stats %>%
+#   ggplot(aes(x = reorder(company, note_moyenne), y = note_moyenne, fill = company)) +
+#   geom_col(alpha = 0.8, width = 0.7) +
+#   geom_errorbar(
+#     aes(ymin = note_moyenne - ecart_type, ymax = note_moyenne + ecart_type),
+#     width = 0.2,
+#     color = "gray30",
+#     linewidth = 1
+#   ) +
+#   geom_text(
+#     aes(label = round(note_moyenne, 2)),
+#     hjust = -0.3,
+#     fontface = "bold",
+#     size = 5
+#   ) +
+#   coord_flip(ylim = c(0, 5.5)) +
+#   scale_fill_brewer(palette = "Set2") +
+#   labs(
+#     title = "Classement des Entreprises par Note Moyenne",
+#     subtitle = "Barres d'erreur = écart-type (variabilité des opinions)",
+#     x = NULL,
+#     y = "Note Moyenne (1-5)"
+#   ) +
+#   theme(legend.position = "none")
+knitr::include_graphics("resultats_analyse/viz_02_classement_entreprises.png")
+```
+
+## Tests Statistiques
+
+```{r statistical-tests}
+# Test ANOVA pour différences significatives
+anova_result <- aov(overall_ratings ~ company, data = df)
+anova_summary <- summary(anova_result)
+
+# Test post-hoc (Tukey HSD)
+tukey_result <- TukeyHSD(anova_result)
+
+# Afficher résultats
+cat("Test ANOVA:\n")
+print(anova_summary)
+
+cat("\n\nTest de Tukey (différences par paires):\n")
+print(tukey_result$company[1:10, ])  # Afficher les 10 premières comparaisons
+```
+
+::: callout-warning
+## ⚠️ Attention
+
+Le test ANOVA révèle des **différences statistiquement significatives** entre les entreprises (p \< 0.001). Les différences observées ne sont pas dues au hasard.
+:::
+
+------------------------------------------------------------------------
+
+# Analyse Multi-Dimensionnelle
+
+## Les 5 Dimensions de Satisfaction
+
+```{r dimensions-analysis}
+dimensions_long <- df %>%
+  select(company, ends_with("_stars")) %>%
+  pivot_longer(
+    cols = ends_with("_stars"),
+    names_to = "dimension",
+    values_to = "rating"
+  ) %>%
+  mutate(
+    dimension = str_remove(dimension, "_stars") %>%
+      str_replace_all("_", " ") %>%
+      str_to_title()
+  )
+
+dimension_stats <- dimensions_long %>%
+  group_by(dimension) %>%
+  summarise(
+    moyenne = mean(rating, na.rm = TRUE),
+    mediane = median(rating, na.rm = TRUE),
+    ecart_type = sd(rating, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(moyenne))
+
+dimension_stats %>%
+  mutate(across(where(is.numeric), ~round(.x, 2))) %>%
+  kable(caption = "Classement des dimensions de satisfaction") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+```{r dimensions-boxplot, fig.width=12, fig.height=7, fig.cap="Distribution des notes par dimension"}
+# dimensions_long %>%
+#   ggplot(aes(x = reorder(dimension, rating), y = rating, fill = dimension)) +
+#   geom_boxplot(alpha = 0.7, outlier.alpha = 0.2) +
+#   stat_summary(
+#     fun = mean,
+#     geom = "point",
+#     shape = 23,
+#     size = 3,
+#     fill = "red",
+#     color = "darkred"
+#   ) +
+#   coord_flip() +
+#   scale_fill_brewer(palette = "Set3") +
+#   labs(
+#     title = "Distribution des Notes par Dimension",
+#     subtitle = "Losange rouge = moyenne",
+#     x = NULL,
+#     y = "Note (1-5 étoiles)"
+#   ) +
+#   theme(legend.position = "none")
+knitr::include_graphics("resultats_analyse/viz_05_boxplot_dimensions.png")
+```
+
+## Heatmap Entreprises × Dimensions
+
+```{r heatmap-dimensions, fig.width=12, fig.height=7, fig.cap="Carte thermique des performances par dimension"}
+# dimension_matrix <- dimensions_long %>%
+#   group_by(company, dimension) %>%
+#   summarise(score = mean(rating, na.rm = TRUE), .groups = "drop")
+
+# dimension_matrix %>%
+#   ggplot(aes(x = dimension, y = company, fill = score)) +
+#   geom_tile(color = "white", linewidth = 1.5) +
+#   geom_text(
+#     aes(label = round(score, 2)),
+#     color = "white",
+#     fontface = "bold",
+#     size = 5
+#   ) +
+#   scale_fill_viridis_c(option = "plasma", name = "Score Moyen") +
+#   labs(
+#     title = "Performance Multi-Dimensionnelle par Entreprise",
+#     x = NULL,
+#     y = NULL
+#   ) +
+#   theme(
+#     axis.text.x = element_text(angle = 30, hjust = 1),
+#     panel.grid = element_blank()
+#   )
+knitr::include_graphics("resultats_analyse/viz_03_heatmap_dimensions.png")
+```
+
+:::: callout-important
+::: callout-important
+## 🎯 Points Clés
+:::
+
+-   **Dimension la mieux notée**: Compensation & Benefits (moy. 3.94)
+
+-   **Dimension la plus critique**: Senior Management (moy. 3.32)
+
+    -   **Variabilité la plus forte**: Senior Management (écart-type 1.31)
+
+-   **Facebook** excelle dans toutes les dimensions
+
+-   **Amazon** et **Netflix** ont le plus de marge d'amélioration\
+::::
+
+------------------------------------------------------------------------
+
+# Analyse Temporelle
+
+## Évolution des Notes dans le Temps
+
+```{r temporal-analysis}
+yearly_trends <- df %>%
+  filter(!is.na(review_year), review_year >= 2008, review_year <= 2023) %>%
+  group_by(review_year, company) %>%
+  summarise(
+    n_avis = n(),
+    note_moyenne = mean(overall_ratings, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  filter(n_avis >= 10)  # Minimum 10 avis par an
+```
+
+```{r temporal-plot, fig.width=14, fig.height=8, fig.cap="Évolution temporelle des notes moyennes"}
+knitr::include_graphics("resultats_analyse/viz_06_evolution_temporelle.png")
+```
+
+## Analyse de Tendance
+
+```{r trend-analysis}
+# Régression linéaire par entreprise
+trend_models <- yearly_trends %>%
+  group_by(company) %>%
+  summarise(
+    pente = coef(lm(note_moyenne ~ review_year))[2],
+    tendance = ifelse(pente > 0, "↗️ Amélioration", "↘️ Dégradation"),
+    variation_annuelle = round(pente, 3),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(pente))
+
+trend_models %>%
+  kable(
+    caption = "Analyse de tendance par entreprise",
+    col.names = c("Entreprise", "Pente", "Tendance", "Variation/an")
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Radar Charts par Entreprise
+
+```{r}
+# Créer une grille de 2x3 pour les 6 entreprises
+par(mfrow = c(2, 3), mar = c(1, 1, 3, 1))
+
+companies <- c("amazon", "microsoft", "apple", "google", "facebook", "netflix")
+
+for(comp in companies) {
+  img_file <- paste0("resultats_analyse/viz_04_radar_", comp, ".png")
+  if(file.exists(img_file)) {
+    img <- png::readPNG(img_file)
+    plot(NA, xlim = c(0, 1), ylim = c(0, 1), xaxt = "n", yaxt = "n", xlab = "", ylab = "", bty = "n")
+    rasterImage(img, 0, 0, 1, 1)
+    title(toupper(comp), line = -1, cex.main = 1.2)
+  } else {
+    plot(NA, xlim = c(0, 1), ylim = c(0, 1), xaxt = "n", yaxt = "n", xlab = "", ylab = "", bty = "n")
+    text(0.5, 0.5, paste("Non disponible\npour", comp), cex = 1.2)
+    title(toupper(comp), line = -1, cex.main = 1.2)
+  }
+}
+```
+
+## Dashboard Synthèse
+
+```{r}
+knitr::include_graphics("resultats_analyse/viz_10_dashboard_complet.png")
+
+```
+
+------------------------------------------------------------------------
+
+# Analyse Textuelle
+
+## Mots-Clés dans les Points Positifs
+
+```{r text-analysis-pros}
+library(tidytext)
+library(wordcloud)
+
+# Échantillonner pour performance
+set.seed(123)
+df_sample <- df %>%
+  filter(!is.na(pros), pros != "", pros != "none") %>%
+  sample_n(min(5000, n()))
+
+pros_words <- df_sample %>%
+  unnest_tokens(word, pros) %>%
+  anti_join(stop_words, by = "word") %>%
+  filter(str_detect(word, "^[a-z]+$"), nchar(word) > 3) %>%
+  count(word, sort = TRUE) %>%
+  head(30)
+```
+
+```{r wordcloud-pros, fig.width=10, fig.height=8, fig.cap="Nuage de mots - Points positifs"}
+set.seed(42)
+wordcloud(
+  words = pros_words$word,
+  freq = pros_words$n,
+  min.freq = 2,
+  max.words = 100,
+  random.order = FALSE,
+  rot.per = 0.35,
+  colors = brewer.pal(8, "Dark2")
+)
+```
+
+```{r pros-barplot, fig.cap="Top 20 mots dans les points positifs"}
+pros_words %>%
+  head(20) %>%
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_col(fill = "#27ae60", alpha = 0.8) +
+  geom_text(aes(label = n), hjust = -0.2, size = 3.5) +
+  coord_flip() +
+  labs(
+    title = "Mots les Plus Fréquents dans les Points Positifs",
+    x = NULL,
+    y = "Fréquence"
+  )
+```
+
+## Mots-Clés dans les Points Négatifs
+
+```{r text-analysis-cons}
+cons_words <- df_sample %>%
+  filter(!is.na(cons), cons != "", cons != "none") %>%
+  unnest_tokens(word, cons) %>%
+  anti_join(stop_words, by = "word") %>%
+  filter(str_detect(word, "^[a-z]+$"), nchar(word) > 3) %>%
+  count(word, sort = TRUE) %>%
+  head(20)
+```
+
+```{r cons-barplot, fig.cap="Top 20 mots dans les points négatifs"}
+cons_words %>%
+  ggplot(aes(x = reorder(word, n), y = n)) +
+  geom_col(fill = "#e74c3c", alpha = 0.8) +
+  geom_text(aes(label = n), hjust = -0.2, size = 3.5) +
+  coord_flip() +
+  labs(
+    title = "Mots les Plus Fréquents dans les Points Négatifs",
+    x = NULL,
+    y = "Fréquence"
+  )
+```
+
+------------------------------------------------------------------------
+
+# Insights Business & Recommandations
+
+## Synthèse des Découvertes
+
+::: panel-tabset
+### 🏆 Leader
+
+```{r leader-company}
+best_company <- company_stats %>% slice_max(note_moyenne, n = 1)
+
+cat("**Entreprise la mieux notée:**", best_company$company, "\n")
+cat("- Note moyenne:", round(best_company$note_moyenne, 2), "/5\n")
+cat("- Nombre d'avis:", format(best_company$n_avis, big.mark = ","), "\n")
+cat("- Écart-type:", round(best_company$ecart_type, 2), "(forte cohérence)\n")
+```
+
+### ⚠️ Challenger
+
+```{r challenger-company}
+worst_company <- company_stats %>% slice_min(note_moyenne, n = 1)
+
+cat("**Entreprise avec le plus de marge d'amélioration:**", worst_company$company, "\n")
+cat("- Note moyenne:", round(worst_company$note_moyenne, 2), "/5\n")
+cat("- Nombre d'avis:", format(worst_company$n_avis, big.mark = ","), "\n")
+cat("- Points d'amélioration prioritaires: Senior Management, Work-Life Balance\n")
+```
+
+### 📊 Dimension Critique
+
+```{r weakest-dimension}
+weakest_dim <- dimension_stats %>% slice_min(moyenne, n = 1)
+
+cat("**Dimension la plus critique:**", weakest_dim$dimension, "\n")
+cat("- Score moyen:", round(weakest_dim$moyenne, 2), "/5\n")
+cat("- Impact: Tous les acteurs du secteur doivent investir dans cette dimension\n")
+```
+:::
+
+## Recommandations Stratégiques
+
+### Pour les Entreprises
+
+1.  **Investir dans le Senior Management**
+    -   Formation en leadership et communication
+    -   Processus de feedback 360°
+    -   Transparence décisionnelle
+2.  **Améliorer l'Équilibre Vie Pro/Perso**
+    -   Flexibilité horaire
+    -   Télétravail
+    -   Congés sabbatiques
+3.  **Clarifier les Opportunités de Carrière**
+    -   Plans de développement individuels
+    -   Mobilité interne
+    -   Programmes de mentoring
+
+### Pour les Candidats
+
+-   **Prioriser les dimensions importantes pour vous** plutôt que la note globale
+-   **Lire les avis récents** (dernières 2-3 années)
+-   **Analyser les tendances** d'amélioration/dégradation
+-   **Considérer le contexte** (taille de l'équipe, localisation, département)
+
+------------------------------------------------------------------------
+
+# Conclusion
+
+Cette analyse de 67,529 avis Glassdoor révèle des **différences significatives** entre les 5 géants de la tech étudiés. Bien que tous maintiennent des notes supérieures à 3.5/5, les écarts dans certaines dimensions (notamment le Senior Management et l'équilibre vie pro/perso) représentent des opportunités d'amélioration substantielles.
+
+**Points clés à retenir:**
+
+1.  La **culture d'entreprise** reste le point fort commun
+2.  Le **management** est le défi universel du secteur
+3.  Les **tendances temporelles** montrent une amélioration globale depuis 2015
+4.  L'analyse textuelle confirme l'importance de la **flexibilité** et de l'**innovation**
+
+------------------------------------------------------------------------
+
+# Annexes
+
+## Informations Techniques
+
+-   **Langage**: R
+-   **Packages principaux**: tidyverse, ggplot2, tidytext
+-   **Date d'analyse**: `r Sys.Date()`
+-   **Auteur**: Eya Zantour
+
+## Références
+
+-   Dataset: Glassdoor Employee Reviews (Glassdoor)
+-   Méthodologie: Analyse exploratoire des données (EDA)
+-   Tests statistiques: ANOVA, Tukey HSD
+
+## Code Source Complet
+
+Le code source complet de cette analyse est disponible sur GitHub: \[lien-vers-repo\]
+
+------------------------------------------------------------------------
+
+::: {.callout-note icon="false"}
+## 📧 Contact
+
+Pour toute question concernant cette analyse: eyazantour926\@gmail.com
+:::

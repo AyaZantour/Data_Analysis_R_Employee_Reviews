@@ -1,0 +1,4 @@
+# requirements.txt pour cache pip
+jupyter-cache>=0.5.0
+nbformat>=5.0
+jupyter>=1.0
