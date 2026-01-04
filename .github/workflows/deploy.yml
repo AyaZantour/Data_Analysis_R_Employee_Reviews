@@ -1,36 +1,59 @@
-name: Deploy Quarto Report
+name: Deploy HTML Report
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # Allows manual runs
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Setup Quarto
-      uses: quarto-dev/quarto-actions/setup@v2
-    
-    - name: Setup R
-      uses: r-lib/actions/setup-r@v2
-      with:
-        r-version: '4.3'
-    
-    - name: Install R packages
-      run: |
-        Rscript -e "install.packages(c('tidyverse', 'rmarkdown', 'knitr', 'kableExtra', 'DT', 'ggplot2'))"
-    
-    - name: Render QMD file
-      run: |
-        quarto render index.qmd --to html
-    
-    - name: Deploy to GitHub Pages
-      uses: JamesIves/github-pages-deploy-action@v4
-      with:
-        folder: .  # Sends everything
-        branch: main  # Creates special branch for website
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Clean cache directories
+        run: |
+          rm -rf _cache/ index_cache/ *_cache/
+      
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.3'
+      
+      - name: Install R packages
+        run: |
+          Rscript -e "install.packages(c('tidyverse', 'rmarkdown', 'knitr', 'kableExtra', 'DT', 'ggplot2'))"
+      
+      - name: Force render without cache
+        run: |
+          Rscript -e "
+          # Force clean render
+          rmarkdown::render(
+            'index.qmd',
+            output_file = 'index.html',
+            clean = TRUE,
+            knit_root_dir = getwd(),
+            intermediates_dir = tempdir()
+          )"
+      
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
