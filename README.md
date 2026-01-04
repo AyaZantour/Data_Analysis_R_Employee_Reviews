@@ -2,22 +2,26 @@
 
 ## 🎯 Objectif du Projet
 
-Analyse approfondie de **67,529 avis** d'employés sur 5 géants de la tech (Amazon, Microsoft, Apple, Google, Facebook) pour identifier les facteurs clés de satisfaction et produire des insights business actionnables.
+Analyse approfondie de **67,529 avis** d'employés sur 6 géants de la tech (Amazon, Microsoft, Apple, Google, Facebook, Netflix) pour identifier les facteurs clés de satisfaction et produire des insights business actionnables.
 
 ---
 
 ## 📁 Structure du Projet
 
 ```
-votre_projet/
-├── employee_reviews.csv          # Dataset principal (à placer ici)
-├── analyse_complete.R            # Script d'analyse principal
-├── visualisations.R              # Script de génération des graphiques
+R_Project/
+├──data
+|   └── raw
+|       └── employee_reviews.csv  # Dataset principal
+├── outputs
+│   ├── *.csv                     # Résultats exportés
+│   └── *.rds                     # Objets R sauvegardés
+├── R
+|   ├── analyse_complete.R        # Script d'analyse principal
+|   └── visualisations.R          # Script de génération des graphiques
 ├── rapport_glassdoor.qmd         # Template Quarto
 ├── resultats_analyse/            # Dossier créé automatiquement
-│   ├── *.csv                     # Résultats exportés
-│   ├── *.png                     # Visualisations
-│   └── *.rds                     # Objets R sauvegardés
+│   └── *.png                     # Visualisations
 └── README.md                     # Ce fichier
 ```
 
@@ -79,10 +83,10 @@ source("analyse_complete.R")
 source("visualisations.R")
 
 # 4. Compiler le rapport Quarto
-quarto::quarto_render("rapport_glassdoor.qmd")
+quarto::quarto_render("index.qmd")
 ```
 
-Résultat: Un fichier HTML interactif `rapport_glassdoor.html` sera créé.
+Résultat: Un fichier HTML interactif `index.html` sera créé.
 
 ---
 
@@ -207,7 +211,7 @@ company_colors <- c(
 
 ### Modifier le Thème Quarto
 
-Dans `rapport_glassdoor.qmd`, changer:
+Dans `index.qmd`, changer:
 
 ```yaml
 format:
@@ -447,8 +451,8 @@ quarto render rapport_glassdoor.qmd --verbose
 ## 📧 Support
 
 Pour toute question:
-- **Email**: votre.email@example.com
-- **GitHub Issues**: [lien-vers-repo]
+- **Email**: eyazantour926@gmail.com
+- **GitHub Issues**: https://github.com/AyaZantour/Data_Analysis_R_Employee_Reviews
 - **Documentation R**: `?function_name` dans la console
 
 ---
