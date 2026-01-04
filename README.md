@@ -2,7 +2,7 @@
 
 ## 🎯 Objectif du Projet
 
-Analyse approfondie de **67,529 avis** d'employés sur 5 géants de la tech (Amazon, Microsoft, Apple, Google, Facebook) pour identifier les facteurs clés de satisfaction et produire des insights business actionnables.
+Analyse approfondie de **67,529 avis** d'employés sur 6 géants de la tech (Amazon, Microsoft, Apple, Google, Facebook, Netflix) pour identifier les facteurs clés de satisfaction et produire des insights business actionnables.
 
 ---
 
