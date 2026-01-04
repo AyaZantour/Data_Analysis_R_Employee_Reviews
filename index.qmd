@@ -1,6 +1,6 @@
 ---
 title: "Analyse des Avis Glassdoor"
-subtitle: "Étude comparative de 5 géants de la Tech"
+subtitle: "Étude comparative de 6 géants de la Tech"
 author: "Eya Zantour"
 date: today
 format:
@@ -56,7 +56,7 @@ theme_set(theme_minimal())
 ## 📊 Chiffres Clés
 
 -   **Dataset**: 67,529 avis analysés
--   **Entreprises**: Amazon, Microsoft, Apple, Google, Facebook
+-   **Entreprises**: Amazon, Microsoft, Apple, Google, Facebook, Netflix
 -   **Période**: 2008-2023
 -   **Note moyenne globale**: 3.83/5 ⭐
 :::
@@ -116,37 +116,26 @@ glimpse(df)
 # Statistiques descriptives
 overview_stats <- df %>%
   summarise(
-    total_avis = n(),
-    entreprises = n_distinct(company),
-    annee_min = min(review_year, na.rm = TRUE),
-    annee_max = max(review_year, na.rm = TRUE),
-    note_moyenne = mean(overall_ratings, na.rm = TRUE),
+    total_avis   = n(),
+    entreprises  = n_distinct(company),
+    annee_min    = min(review_year, na.rm = TRUE),
+    annee_max    = max(review_year, na.rm = TRUE),
+    note_moyenne = round(mean(overall_ratings, na.rm = TRUE), 2),
     note_mediane = median(overall_ratings, na.rm = TRUE)
   )
 
 overview_stats %>%
-  pivot_longer(everything(), names_to = "Métrique", values_to = "Valeur") %>%
+  pivot_longer(everything(),
+               names_to = "Métrique",
+               values_to = "Valeur") %>%
   kable(caption = "Statistiques descriptives du dataset") %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
+
 ```
 
 ## Répartition par Entreprise
 
-```{r company-distribution}
-company_counts <- df %>%
-  count(company, sort = TRUE) %>%
-  mutate(
-    pourcentage = n / sum(n) * 100,
-    pourcentage_fmt = paste0(round(pourcentage, 1), "%")
-  )
-
-# Tableau interactif
-datatable(
-  company_counts,
-  colnames = c("Entreprise", "Nombre d'avis", "Pourcentage", ""),
-  options = list(pageLength = 5, dom = 't'),
-  rownames = FALSE
-)
+```         
 ```
 
 ```{r company-barplot, fig.cap="Répartition des avis par entreprise"}
@@ -336,10 +325,25 @@ Le test ANOVA révèle des **différences statistiquement significatives** entre
 ## Les 5 Dimensions de Satisfaction
 
 ```{r dimensions-analysis}
+# Clean the star columns first
+stars_columns <- c("work_balance_stars", "culture_values_stars", 
+                   "career_opportunities_stars", "comp_benefit_stars", 
+                   "senior_management_stars")
+
+# Convert to numeric and handle non-numeric values
+for(col in stars_columns) {
+  if(col %in% names(df)) {
+    df[[col]] <- as.numeric(as.character(df[[col]]))
+  }
+}
+
+# Create dimensions_long with only valid data
 dimensions_long <- df %>%
-  select(company, ends_with("_stars")) %>%
+  select(company, all_of(stars_columns)) %>%
+  # Remove rows where ALL star columns are NA
+  filter(if_any(all_of(stars_columns), ~!is.na(.))) %>%
   pivot_longer(
-    cols = ends_with("_stars"),
+    cols = all_of(stars_columns),
     names_to = "dimension",
     values_to = "rating"
   ) %>%
@@ -347,22 +351,32 @@ dimensions_long <- df %>%
     dimension = str_remove(dimension, "_stars") %>%
       str_replace_all("_", " ") %>%
       str_to_title()
-  )
-
-dimension_stats <- dimensions_long %>%
-  group_by(dimension) %>%
-  summarise(
-    moyenne = mean(rating, na.rm = TRUE),
-    mediane = median(rating, na.rm = TRUE),
-    ecart_type = sd(rating, na.rm = TRUE),
-    .groups = "drop"
   ) %>%
-  arrange(desc(moyenne))
+  # Remove NA ratings
+  filter(!is.na(rating))
 
-dimension_stats %>%
-  mutate(across(where(is.numeric), ~round(.x, 2))) %>%
-  kable(caption = "Classement des dimensions de satisfaction") %>%
-  kable_styling(bootstrap_options = c("striped", "hover"))
+# Check if we have data
+cat("Number of valid ratings:", nrow(dimensions_long), "\n")
+
+if(nrow(dimensions_long) > 0) {
+  dimension_stats <- dimensions_long %>%
+    group_by(dimension) %>%
+    summarise(
+      n_ratings = n(),
+      moyenne = mean(rating, na.rm = TRUE),
+      mediane = median(rating, na.rm = TRUE),
+      ecart_type = sd(rating, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    arrange(desc(moyenne))
+  
+  dimension_stats %>%
+    mutate(across(where(is.numeric), ~round(.x, 2))) %>%
+    kable(caption = "Classement des dimensions de satisfaction") %>%
+    kable_styling(bootstrap_options = c("striped", "hover"))
+} else {
+  cat("⚠️ No valid dimension data available\n")
+}
 ```
 
 ```{r dimensions-boxplot, fig.width=12, fig.height=7, fig.cap="Distribution des notes par dimension"}
@@ -613,14 +627,7 @@ cat("- Nombre d'avis:", format(worst_company$n_avis, big.mark = ","), "\n")
 cat("- Points d'amélioration prioritaires: Senior Management, Work-Life Balance\n")
 ```
 
-### 📊 Dimension Critique
-
-```{r weakest-dimension}
-weakest_dim <- dimension_stats %>% slice_min(moyenne, n = 1)
-
-cat("**Dimension la plus critique:**", weakest_dim$dimension, "\n")
-cat("- Score moyen:", round(weakest_dim$moyenne, 2), "/5\n")
-cat("- Impact: Tous les acteurs du secteur doivent investir dans cette dimension\n")
+```{}
 ```
 :::
 
@@ -680,7 +687,7 @@ Cette analyse de 67,529 avis Glassdoor révèle des **différences significative
 
 ## Code Source Complet
 
-Le code source complet de cette analyse est disponible sur GitHub: \[lien-vers-repo\]
+Le code source complet de cette analyse est disponible sur GitHub: <https://github.com/AyaZantour/Data_Analysis_R_Employee_Reviews>
 
 ------------------------------------------------------------------------
 
