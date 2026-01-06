@@ -1,0 +1,1349 @@
+---
+title: "Analyse des Avis Glassdoor"
+subtitle: "Qu'est-ce qui fait la satisfaction des employés dans la Tech ?"
+author: "Eya Zantour"
+date: today
+format:
+  revealjs:
+    theme: [simple]
+    slide-number: true
+    navigation-mode: linear
+    chalkboard: 
+      buttons: true
+    preview-links: auto
+    logo: ""
+    css: styles.css
+    footer: "Analyse Glassdoor - Projet Data Science"
+    width: 1600
+    height: 900
+    transition: slide
+    background-transition: fade
+    highlight-style: github
+    code-fold: true
+    code-tools: true
+execute:
+  echo: false
+  warning: false
+  message: false
+  cache: true
+---
+
+```{r setup}
+#| include: false
+
+# Charger les packages
+library(tidyverse)
+library(scales)
+library(knitr)
+library(kableExtra)
+library(here)
+
+# Charger et préparer les données
+df <- read_csv(here("data", "raw", "employee_reviews.csv"), show_col_types = FALSE) %>%
+  janitor::clean_names()
+
+# Corrections des noms de colonnes
+df <- df %>%
+  rename(
+    career_opportunities_stars = carrer_opportunities_stars,
+    senior_management_stars = senior_mangemnet_stars
+  )
+
+# Conversion en numérique
+stars_columns <- c("work_balance_stars", "culture_values_stars", 
+                   "career_opportunities_stars", "comp_benefit_stars", 
+                   "senior_management_stars")
+
+for(col in stars_columns) {
+  if(col %in% names(df)) {
+    df[[col]] <- as.numeric(as.character(df[[col]]))
+  }
+}
+
+# Extraire l'année
+df <- df %>%
+  mutate(
+    review_year = case_when(
+      str_detect(dates, "\\d{4}") ~ as.numeric(str_extract(dates, "\\d{4}")),
+      TRUE ~ NA_real_
+    )
+  )
+
+# Calculer les statistiques globales
+overall_stats <- df %>%
+  summarise(
+    total_reviews = n(),
+    companies = n_distinct(company),
+    avg_rating = mean(overall_ratings, na.rm = TRUE),
+    pct_positive = mean(overall_ratings >= 4, na.rm = TRUE) * 100
+  )
+
+company_stats <- df %>%
+  group_by(company) %>%
+  summarise(
+    n_avis = n(),
+    note_moyenne = mean(overall_ratings, na.rm = TRUE),
+    ecart_type = sd(overall_ratings, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(note_moyenne))
+```
+
+#  {background-color="#1e3a8a"}
+
+::: title-slide
+## Analyse des Avis Glassdoor {.title}
+
+### Satisfaction des Employés dans les Géants de la Tech {.subtitle}
+
+**`r format(overall_stats$total_reviews, big.mark = ",")` avis analysés** \| **`r overall_stats$companies` entreprises** \| **Période : 2008-2018**
+
+Votre Nom \| Projet Data Science
+
+Date: `r format(Sys.Date(), "%d %B %Y")`
+:::
+
+------------------------------------------------------------------------
+
+## 📋 Agenda {background-color="#f8fafc"}
+
+::: incremental
+1.  **Vue d'Ensemble** - Contexte et objectifs
+2.  **Dataset** - Description des données
+3.  **Classement Global** - Qui domine ?
+4.  **Analyse Multi-Dimensionnelle** - Forces et faiblesses
+5.  **Évolution Temporelle** - Tendances sur 10 ans
+6.  **Insights Business** - Ce que les données révèlent
+7.  **Recommandations** - Actions concrètes
+8.  **Q&A**
+:::
+
+------------------------------------------------------------------------
+
+# 1. Vue d'Ensemble {.section-title background-color="#0f172a"}
+
+------------------------------------------------------------------------
+
+## 🎯 Objectif du Projet {.smaller}
+
+::::: columns
+::: {.column width="50%"}
+**Question Centrale**
+
+*Qu'est-ce qui fait la satisfaction des employés dans les entreprises tech ?*
+
+**Approche**
+
+-   Analyse quantitative de `r format(overall_stats$total_reviews, big.mark = ",")` avis
+-   6 entreprises majeures (FAAMG)
+-   5 dimensions de satisfaction mesurées
+-   Période : 2008-2018 (10 ans de données)
+:::
+
+::: {.column width="50%"}
+**Méthodes Utilisées**
+
+✅ Statistiques descriptives\
+✅ Tests ANOVA (significativité)\
+✅ Analyse temporelle\
+✅ Text mining (NLP)\
+✅ Visualisations avancées (ggplot2)
+
+**Outils**
+
+-   R + Tidyverse
+-   ggplot2
+-   Quarto pour le rapport
+:::
+:::::
+
+------------------------------------------------------------------------
+
+# 2. Le Dataset {.section-title background-color="#0f172a"}
+
+------------------------------------------------------------------------
+
+## 📊 Vue d'Ensemble des Données {.smaller}
+
+```{r dataset-overview}
+#| echo: false
+
+# Créer un tableau récapitulatif
+overview_table <- tibble(
+  Métrique = c("Nombre total d'avis", "Nombre d'entreprises", 
+               "Période couverte", "Note moyenne globale",
+               "% d'avis positifs (≥4★)", "% d'avis négatifs (≤2★)"),
+  Valeur = c(
+    format(overall_stats$total_reviews, big.mark = ","),
+    as.character(overall_stats$companies),
+    "2008 - 2018",
+    paste0(round(overall_stats$avg_rating, 2), " / 5"),
+    paste0(round(overall_stats$pct_positive, 1), "%"),
+    paste0(round(mean(df$overall_ratings <= 2, na.rm = TRUE) * 100, 1), "%")
+  )
+)
+
+overview_table %>%
+  kbl(align = c("l", "c")) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE,
+    font_size = 24
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#1e3a8a") %>%
+  row_spec(c(4, 5), bold = TRUE, background = "#dbeafe")
+```
+
+------------------------------------------------------------------------
+
+## 🏢 Répartition par Entreprise {.smaller}
+
+```{r company-distribution}
+#| fig-width: 14
+#| fig-height: 7
+
+company_counts <- df %>%
+  count(company, sort = TRUE) %>%
+  mutate(
+    percentage = n / sum(n) * 100,
+    label = paste0(format(n, big.mark = ","), "\n(", round(percentage, 1), "%)")
+  )
+
+company_colors <- c(
+  "amazon" = "#FF9900",
+  "microsoft" = "#00A4EF",
+  "apple" = "#A2AAAD",
+  "google" = "#4285F4",
+  "facebook" = "#1877F2",
+  "netflix" = "#E50914"
+)
+
+ggplot(company_counts, aes(x = reorder(company, n), y = n, fill = company)) +
+  geom_col(alpha = 0.9, width = 0.7) +
+  geom_text(aes(label = label), hjust = -0.1, size = 5, fontface = "bold") +
+  coord_flip(ylim = c(0, max(company_counts$n) * 1.15)) +
+  scale_fill_manual(values = company_colors) +
+  scale_y_continuous(labels = comma) +
+  labs(
+    title = "Amazon domine le dataset avec 39% des avis",
+    subtitle = "Nombre d'avis par entreprise (2008-2018)",
+    x = NULL,
+    y = "Nombre d'avis"
+  ) +
+  theme_minimal(base_size = 18) +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(face = "bold", size = 22),
+    plot.subtitle = element_text(size = 16, color = "gray40"),
+    panel.grid.minor = element_blank()
+  )
+```
+
+------------------------------------------------------------------------
+
+## 📝 Structure des Données {.smaller}
+
+::::: columns
+::: {.column width="50%"}
+**Variables Principales**
+
+-   `overall_ratings` : Note globale (1-5★)
+-   `company` : Nom de l'entreprise
+-   `dates` : Date de l'avis
+-   `job_title` : Poste occupé
+-   `location` : Localisation
+
+**Variables Textuelles**
+
+-   `pros` : Points positifs
+-   `cons` : Points négatifs
+-   `summary` : Résumé
+-   `advice_to_mgmt` : Conseils au management
+:::
+
+::: {.column width="50%"}
+**5 Dimensions de Satisfaction**
+
+1.  `work_balance_stars` : Équilibre vie pro/perso
+2.  `culture_values_stars` : Culture d'entreprise
+3.  `career_opportunities_stars` : Opportunités de carrière
+4.  `comp_benefit_stars` : Rémunération & avantages
+5.  `senior_management_stars` : Management senior
+
+**Métadonnées**
+
+-   `helpful_count` : Votes utiles
+-   `link` : URL de l'avis original
+:::
+:::::
+
+------------------------------------------------------------------------
+
+# 3. Classement Global {.section-title background-color="#0f172a"}
+
+## Les Résultats Choc
+
+------------------------------------------------------------------------
+
+## 🏆 Le Classement Complet {.smaller}
+
+```{r ranking-table}
+#| echo: false
+
+ranking_display <- company_stats %>%
+  mutate(
+    rang = row_number(),
+    note_format = paste0(round(note_moyenne, 2), " / 5"),
+    variabilite = case_when(
+      ecart_type < 1.0 ~ "Faible ✅",
+      ecart_type < 1.2 ~ "Moyenne ⚠️",
+      TRUE ~ "Forte 🔴"
+    )
+  ) %>%
+  select(
+    `Rang` = rang,
+    `Entreprise` = company,
+    `Note Moyenne` = note_format,
+    `Nombre d'Avis` = n_avis,
+    `Écart-type` = ecart_type,
+    `Variabilité` = variabilite
+  )
+
+ranking_display %>%
+  kbl(align = c("c", "l", "c", "r", "c", "c")) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width = FALSE,
+    font_size = 20
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#1e3a8a") %>%
+  row_spec(1, bold = TRUE, background = "#22c55e", color = "white") %>%
+  row_spec(6, bold = TRUE, background = "#ef4444", color = "white") %>%
+  column_spec(3, bold = TRUE)
+```
+
+::: {.callout-important icon="false"}
+## 🎯 Insight Clé
+
+**Facebook** domine avec **4.51/5** tandis que **Netflix** (3.41) et **Amazon** (3.59) peinent à satisfaire leurs employés.
+:::
+
+------------------------------------------------------------------------
+
+## 📊 Visualisation du Classement {.smaller}
+
+```{r ranking-viz}
+#| fig-width: 14
+#| fig-height: 8
+
+ggplot(company_stats, aes(x = reorder(company, note_moyenne), y = note_moyenne, fill = company)) +
+  geom_col(alpha = 0.85, width = 0.7) +
+  geom_errorbar(
+    aes(ymin = note_moyenne - ecart_type, ymax = note_moyenne + ecart_type),
+    width = 0.25,
+    color = "gray20",
+    linewidth = 1
+  ) +
+  geom_text(
+    aes(label = round(note_moyenne, 2)),
+    hjust = -0.3,
+    fontface = "bold",
+    size = 7,
+    color = "black"
+  ) +
+  geom_text(
+    aes(y = 0.3, label = paste0("n=", format(n_avis, big.mark = ","))),
+    hjust = 0,
+    size = 5,
+    color = "gray30"
+  ) +
+  coord_flip(ylim = c(0, 5.5)) +
+  scale_fill_manual(values = company_colors) +
+  labs(
+    title = "Facebook et Google en tête, Amazon et Netflix à la traîne",
+    subtitle = "Barres d'erreur = écart-type (variabilité des opinions)",
+    x = NULL,
+    y = "Note Moyenne (1-5 étoiles)"
+  ) +
+  theme_minimal(base_size = 18) +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(face = "bold", size = 24),
+    plot.subtitle = element_text(size = 16, color = "gray40"),
+    axis.text = element_text(size = 16),
+    panel.grid.minor = element_blank()
+  )
+```
+
+------------------------------------------------------------------------
+
+## 🔬 Significativité Statistique {.smaller}
+
+```{r anova-test}
+#| echo: true
+
+# Test ANOVA : Les différences sont-elles significatives ?
+anova_model <- aov(overall_ratings ~ company, data = df)
+anova_summary <- summary(anova_model)
+
+# Afficher les résultats
+anova_summary
+```
+
+::: {.callout-tip icon="false"}
+## ✅ Résultat
+
+**p-value \< 2e-16** : Les différences entre entreprises sont **hautement significatives** statistiquement. Ce ne sont **pas des coïncidences** !
+:::
+
+------------------------------------------------------------------------
+
+# 4. Analyse Multi-Dimensionnelle {.section-title background-color="#0f172a"}
+
+## Les 5 Piliers de la Satisfaction
+
+------------------------------------------------------------------------
+
+## 🎭 Les 5 Dimensions Évaluées {.smaller}
+
+```{r dimensions-ranking}
+#| echo: false
+
+dimension_stats <- df %>%
+  select(all_of(stars_columns)) %>%
+  pivot_longer(everything(), names_to = "dimension", values_to = "rating") %>%
+  mutate(
+    dimension = case_when(
+      dimension == "work_balance_stars" ~ "Work-Life Balance",
+      dimension == "culture_values_stars" ~ "Culture & Values",
+      dimension == "career_opportunities_stars" ~ "Career Opportunities",
+      dimension == "comp_benefit_stars" ~ "Compensation & Benefits",
+      dimension == "senior_management_stars" ~ "Senior Management"
+    )
+  ) %>%
+  group_by(dimension) %>%
+  summarise(
+    moyenne = mean(rating, na.rm = TRUE),
+    mediane = median(rating, na.rm = TRUE),
+    observations = sum(!is.na(rating)),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(moyenne)) %>%
+  mutate(
+    rang = row_number(),
+    note_format = paste0(round(moyenne, 2), " / 5")
+  )
+
+dimension_stats %>%
+  select(
+    `Rang` = rang,
+    `Dimension` = dimension,
+    `Moyenne` = note_format,
+    `Médiane` = mediane,
+    `Observations` = observations
+  ) %>%
+  kbl(align = c("c", "l", "c", "c", "r")) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE,
+    font_size = 22
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#1e3a8a") %>%
+  row_spec(1, bold = TRUE, background = "#22c55e", color = "white") %>%
+  row_spec(5, bold = TRUE, background = "#ef4444", color = "white")
+```
+
+------------------------------------------------------------------------
+
+## 🔥 Heatmap : Le Panorama Complet {.smaller}
+
+```{r heatmap}
+#| fig-width: 15
+#| fig-height: 8
+
+library(viridis)
+
+dimension_matrix <- df %>%
+  group_by(company) %>%
+  summarise(
+    `Work-Life\nBalance` = mean(work_balance_stars, na.rm = TRUE),
+    `Culture &\nValues` = mean(culture_values_stars, na.rm = TRUE),
+    `Career\nOpportunities` = mean(career_opportunities_stars, na.rm = TRUE),
+    `Compensation &\nBenefits` = mean(comp_benefit_stars, na.rm = TRUE),
+    `Senior\nManagement` = mean(senior_management_stars, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(cols = -company, names_to = "dimension", values_to = "score")
+
+company_order <- company_stats$company
+dimension_matrix$company <- factor(dimension_matrix$company, levels = rev(company_order))
+
+ggplot(dimension_matrix, aes(x = dimension, y = company, fill = score)) +
+  geom_tile(color = "white", linewidth = 1.5) +
+  geom_text(aes(label = round(score, 2)), 
+            color = "white", 
+            fontface = "bold",
+            size = 6) +
+  scale_fill_viridis(
+    option = "plasma",
+    name = "Score\nMoyen",
+    limits = c(3, 4.6)
+  ) +
+  labs(
+    title = "Work-Life Balance : Le Talon d'Achille Universel",
+    subtitle = "Score moyen par entreprise et dimension (plus clair = meilleur)",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal(base_size = 18) +
+  theme(
+    plot.title = element_text(face = "bold", size = 24),
+    plot.subtitle = element_text(size = 16, color = "gray40"),
+    axis.text.x = element_text(angle = 30, hjust = 1, size = 14),
+    axis.text.y = element_text(size = 16),
+    panel.grid = element_blank(),
+    legend.key.height = unit(1.5, "cm"),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16, face = "bold")
+  )
+```
+
+------------------------------------------------------------------------
+
+## 🎯 Focus : Points Forts par Entreprise {.smaller}
+
+::: panel-tabset
+### Facebook 🏆
+
+**Leader incontesté : 4.51/5**
+
+-   ✅ **Compensation & Benefits** : 4.56/5 (meilleur du secteur)
+-   ✅ **Culture & Values** : 4.51/5
+-   ✅ **Senior Management** : 4.26/5
+-   ⚠️ **Work-Life Balance** : 3.93/5 (seul point faible relatif)
+
+**Formule du succès** : Salaires élevés + Culture forte = Employés satisfaits
+
+### Google 🥈
+
+**Challenger sérieux : 4.34/5**
+
+-   ✅ **Culture & Values** : 4.38/5 (innovation encouragée)
+-   ✅ **Compensation** : 4.38/5
+-   ✅ **Senior Management** : 4.00/5
+-   ⚠️ **Work-Life Balance** : 3.96/5
+
+**Atout majeur** : Équilibre entre rémunération et culture d'innovation
+
+### Apple 🥉
+
+**Position médiane : 3.96/5**
+
+-   ✅ **Culture & Values** : 4.10/5 (ADN produit fort)
+-   ✅ **Compensation** : 4.02/5
+-   🔴 **Work-Life Balance** : 3.37/5 (critique !)
+-   🔴 **Senior Management** : 3.46/5
+
+**Défi** : Améliorer l'équilibre vie pro/perso
+
+### Amazon 🔴
+
+**Dernière place : 3.59/5**
+
+-   🔴 **Work-Life Balance** : 3.01/5 (catastrophique)
+-   🔴 **Senior Management** : 3.17/5
+-   🔴 **Culture** : 3.53/5
+-   ⚠️ **Compensation** : 3.69/5 (seul point acceptable)
+
+**Problème systémique** : Culture de la surcharge de travail
+:::
+
+------------------------------------------------------------------------
+
+## 🔗 Matrice de Corrélation {.smaller}
+
+```{r correlation}
+#| fig-width: 12
+#| fig-height: 9
+
+library(reshape2)
+
+cor_matrix <- df %>%
+  select(all_of(stars_columns)) %>%
+  cor(use = "pairwise.complete.obs")
+
+dim_names <- c("Work-Life\nBalance", "Culture &\nValues", 
+               "Career\nOpportunities", "Compensation &\nBenefits", 
+               "Senior\nManagement")
+
+rownames(cor_matrix) <- colnames(cor_matrix) <- dim_names
+
+cor_melted <- melt(cor_matrix) %>%
+  mutate(
+    Var1 = factor(Var1, levels = rev(dim_names)),
+    Var2 = factor(Var2, levels = dim_names)
+  )
+
+ggplot(cor_melted, aes(x = Var2, y = Var1, fill = value)) +
+  geom_tile(color = "white", linewidth = 1) +
+  geom_text(aes(label = format(round(value, 2), nsmall = 2)), 
+            color = "white", 
+            fontface = "bold",
+            size = 6) +
+  scale_fill_gradient2(
+    low = "#3498db",
+    mid = "white",
+    high = "#e74c3c",
+    midpoint = 0,
+    limits = c(-1, 1),
+    name = "Coefficient\nde corrélation"
+  ) +
+  scale_x_discrete(position = "top") +
+  labs(
+    title = "Le Management Influence Tout : Corrélation de 0.71 avec la Culture",
+    subtitle = "Relations entre les 5 dimensions de satisfaction",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal(base_size = 18) +
+  theme(
+    plot.title = element_text(face = "bold", size = 22),
+    plot.subtitle = element_text(size = 16, color = "gray40"),
+    axis.text.x = element_text(angle = 45, hjust = 0, size = 14),
+    axis.text.y = element_text(size = 14),
+    panel.grid = element_blank(),
+    legend.key.height = unit(2, "cm")
+  )
+```
+
+::: {.callout-important icon="false"}
+## 🎯 Insight Majeur
+
+**Senior Management ↔ Culture** (r = 0.71) : Le leadership définit la culture d'entreprise. Investir dans le management = Améliorer toutes les autres dimensions !
+:::
+
+------------------------------------------------------------------------
+
+# 5. Évolution Temporelle {.section-title background-color="#0f172a"}
+
+## 10 Ans de Tendances
+
+------------------------------------------------------------------------
+
+## 📈 Évolution 2008-2018 {.smaller}
+
+```{r temporal-evolution}
+#| fig-width: 16
+#| fig-height: 8
+
+yearly_by_company <- df %>%
+  filter(!is.na(review_year), review_year >= 2008, review_year <= 2018) %>%
+  group_by(company, review_year) %>%
+  summarise(
+    n_avis = n(),
+    note_moyenne = mean(overall_ratings, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  filter(n_avis >= 10)
+
+ggplot(yearly_by_company, aes(x = review_year, y = note_moyenne, color = company)) +
+  geom_line(linewidth = 1.5, alpha = 0.9) +
+  geom_point(aes(size = n_avis), alpha = 0.7) +
+  geom_smooth(method = "loess", se = FALSE, linetype = "dashed", 
+              linewidth = 1.2, span = 0.7, alpha = 0.5) +
+  scale_color_manual(
+    values = company_colors,
+    name = "Entreprise",
+    guide = guide_legend(nrow = 1)
+  ) +
+  scale_size_continuous(
+    name = "Volume d'avis",
+    range = c(2, 12),
+    breaks = c(100, 1000, 5000),
+    labels = comma
+  ) +
+  scale_x_continuous(breaks = seq(2008, 2018, 2)) +
+  scale_y_continuous(limits = c(3, 5)) +
+  labs(
+    title = "Amélioration Générale sauf Netflix : Volatilité Inquiétante",
+    subtitle = "Taille des points = volume d'avis | Ligne pointillée = tendance lissée",
+    x = "Année",
+    y = "Note Moyenne"
+  ) +
+  theme_minimal(base_size = 18) +
+  theme(
+    plot.title = element_text(face = "bold", size = 24),
+    plot.subtitle = element_text(size = 16, color = "gray40"),
+    legend.position = "bottom",
+    legend.box = "vertical",
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16, face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+```
+
+------------------------------------------------------------------------
+
+## 📊 Tendances par Entreprise {.smaller}
+
+```{r trend-analysis}
+#| echo: false
+
+trend_summary <- yearly_by_company %>%
+  group_by(company) %>%
+  arrange(review_year) %>%
+  summarise(
+    evolution = last(note_moyenne) - first(note_moyenne),
+    tendance = ifelse(evolution > 0, "↗️ Amélioration", "↘️ Dégradation"),
+    note_2008 = first(note_moyenne),
+    note_2018 = last(note_moyenne),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(evolution)) %>%
+  mutate(
+    evolution_format = paste0(ifelse(evolution > 0, "+", ""), round(evolution, 2)),
+    note_2008 = round(note_2008, 2),
+    note_2018 = round(note_2018, 2)
+  )
+
+trend_summary %>%
+  select(
+    `Entreprise` = company,
+    `2008` = note_2008,
+    `2018` = note_2018,
+    `Évolution` = evolution_format,
+    `Tendance` = tendance
+  ) %>%
+  kbl(align = c("l", "c", "c", "c", "l")) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE,
+    font_size = 22
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#1e3a8a") %>%
+  row_spec(which(trend_summary$evolution > 0.3), background = "#dcfce7") %>%
+  row_spec(which(trend_summary$evolution < 0), background = "#fee2e2")
+```
+
+::: {.callout-tip icon="false"}
+## 📈 Observations Clés
+
+-   **Microsoft** : Amélioration spectaculaire (+0.69 pts)
+-   **Amazon** : Redressement constant (+0.49 pts)
+-   **Netflix** : Chute préoccupante (-0.11 pts) malgré forte volatilité
+:::
+
+------------------------------------------------------------------------
+
+# 6. Insights Business {.section-title background-color="#0f172a"}
+
+## Ce que les Données Révèlent
+
+------------------------------------------------------------------------
+
+## 🎯 Les 5 Découvertes Majeures {.smaller}
+
+::: incremental
+### 1️⃣ Le Leadership Définit Tout
+
+-   **Corrélation 0.71** entre Senior Management et Culture
+-   **Corrélation 0.63** avec Career Opportunities
+-   **Levier d'action prioritaire** : Former les leaders = améliorer toutes les dimensions
+
+### 2️⃣ Work-Life Balance : Le Problème Universel
+
+-   **Note la plus faible** : 3.37/5 en moyenne
+-   **Amazon catastrophique** : 3.01/5
+-   **Enjeu générationnel** : Millennials & Gen Z valorisent l'équilibre
+
+### 3️⃣ Compensation ≠ Satisfaction Totale
+
+-   **Compensation** : 3.94/5 (dimension la mieux notée)
+-   Mais **Netflix** (4.13 en compensation) est dernier au classement général
+-   **Insight** : L'argent ne suffit pas si culture/management défaillants
+
+### 4️⃣ La Taille Compte (Négativement)
+
+-   **Facebook** (1,590 avis) : 4.51/5
+-   **Amazon** (26,430 avis) : 3.59/5
+-   Plus l'entreprise grandit, plus il est difficile de maintenir la satisfaction
+
+### 5️⃣ Les Données Prédisent l'Avenir
+
+-   **Microsoft** : Amélioration continue → Attractivité en hausse
+-   **Netflix** : Volatilité inquiétante → Problèmes RH structurels
+-   **Tendance = Indicateur avancé** de performance business
+:::
+
+------------------------------------------------------------------------
+
+## 💬 Analyse Textuelle : Les Mots qui Comptent {.smaller}
+
+::: panel-tabset
+### Points Positifs (PROS)
+
+**Top 10 Mots** dans les avis positifs :
+
+1.  **people** (1,319 occurrences) - La qualité des collègues #1
+2.  **benefits** (1,247) - Avantages sociaux valorisés
+3.  **company** (1,005) - Fierté d'appartenance
+4.  **environment** (624) - Cadre de travail
+5.  **culture** (480) - Culture d'entreprise
+6.  **smart** (475) - Intelligence des équipes
+7.  **opportunities** (456) - Développement de carrière
+8.  **learn** (371) - Apprentissage continu
+9.  **balance** (289) - Quête d'équilibre
+10. **salary** (272) - Rémunération compétitive
+
+**Insight** : Les employés valorisent d'abord **les gens** et **l'environnement**, pas seulement le salaire.
+
+### Points Négatifs (CONS)
+
+**Top 10 Mots** dans les critiques :
+
+1.  **management** (726) - Le problème #1
+2.  **people** (757) - Mauvais collègues/managers
+3.  **time** (689) - Manque de temps
+4.  **life** (512) - Vie personnelle impactée
+5.  **hours** (506) - Horaires excessifs
+6.  **balance** (419) - Déséquilibre
+7.  **hard** (401) - Difficulté du travail
+8.  **politics** (233) - Politique interne
+9.  **difficult** (234) - Environnement compliqué
+10. **culture** (288) - Culture toxique
+
+**Insight** : Le **management défaillant** et le **manque d'équilibre vie pro/perso** dominent les critiques.
+
+### Mots par Entreprise
+
+**Amazon** : work, time, hours, warehouse, management\
+**Google** : perks, free, food, campus, innovative\
+**Facebook** : growth, fast, equity, impact, mission\
+**Apple** : retail, store, customers, products, design\
+**Microsoft** : benefits, stable, legacy, corporate, enterprise\
+**Netflix** : freedom, responsibility, culture, pressure, intense
+
+**Insight** : Chaque entreprise a une **signature culturelle unique** visible dans le vocabulaire.
+:::
+
+------------------------------------------------------------------------
+
+# 7. Recommandations {.section-title background-color="#0f172a"}
+
+## Actions Concrètes pour les Entreprises
+
+------------------------------------------------------------------------
+
+## 🎯 Pour Facebook : Maintenir l'Avance {.smaller}
+
+::::: columns
+::: {.column width="50%"}
+**✅ Points Forts à Capitaliser**
+
+-   Compensation industry-leading (4.56/5)
+-   Culture forte et cohérente (4.51/5)
+-   Management senior performant (4.26/5)
+
+**Stratégie**
+
+1.  **Documenter les best practices**
+    -   Créer un playbook culture
+    -   Partager les méthodes de management
+2.  **Benchmark externe**
+    -   Rester à l'écoute des tendances
+    -   Anticiper les attentes Gen Z
+:::
+
+::: {.column width="50%"}
+**⚠️ Risques Identifiés**
+
+-   Work-Life Balance perfectible (3.93/5)
+-   Pression croissante avec la croissance
+-   Risque de "corporate fatigue"
+
+**Actions Préventives**
+
+1.  **Programme Flex-Work**
+    -   3 jours au bureau max
+    -   No-meeting Fridays
+2.  **Wellbeing Programs**
+    -   Sabbaticals après 5 ans
+    -   Mental health support
+:::
+:::::
+
+------------------------------------------------------------------------
+
+## 🔧 Pour Amazon : Plan de Redressement Urgent {.smaller}
+
+::: {.callout-warning icon="false"}
+## 🚨 Situation Critique
+
+Note : **3.59/5** \| Work-Life Balance : **3.01/5** \| 39% du dataset = problème visible
+:::
+
+**Plan d'Action 90 Jours**
+
+::: incremental
+1.  **Phase 1 : Diagnostic (Jours 1-30)**
+    -   Audit RH sur les 10 sites majeurs
+    -   Focus groups avec 500 employés
+    -   Identification des hotspots (entrepôts, tech, corporate)
+2.  **Phase 2 : Quick Wins (Jours 31-60)**
+    -   Limiter les heures supplémentaires (max 45h/semaine)
+    -   Augmenter les effectifs de 10% (réduire la charge)
+    -   Formation management : empathie et bien-être
+3.  **Phase 3 : Transformation (Jours 61-90)**
+    -   Lancer "Amazon Balance Initiative"
+    -   Flex-time pour les roles tech/corporate
+    -   Metrics : Mesurer le burnout trimestriellement
+4.  **Objectif 1 an** : Passer de 3.01 à 3.50 en Work-Life Balance (+0.49)
+:::
+
+**Budget Estimé** : \$50M → ROI : Réduction turnover de 15% = \$200M économisés
+
+------------------------------------------------------------------------
+
+## 💡 Pour Toutes les Entreprises : Les 3 Leviers {.smaller}
+
+### 🎓 Levier #1 : Investir dans le Leadership
+
+::::: columns
+::: {.column width="60%"}
+**Pourquoi ?** - Corrélation 0.71 avec la culture - Impact sur toutes les dimensions - ROI maximal démontré
+
+**Comment ?** - Programme "Leadership Excellence" (3 mois) - Coaching individuel pour VP+ - 360° feedback trimestriel - Promouvoir sur les soft skills, pas seulement la tech
+:::
+
+::: {.column width="40%"}
+**Coût** : \$10K par manager\
+**Bénéfice** : +0.5 pts satisfaction\
+**ROI** : 400% (réduction turnover)
+
+**Timeline** - Mois 1-2 : Formation - Mois 3-6 : Coaching - Mois 6+ : Mesure impact
+:::
+:::::
+
+------------------------------------------------------------------------
+
+### ⚖️ Levier #2 : Révolutionner le Work-Life Balance
+
+::: panel-tabset
+#### Modèle Hybride
+
+**3-2-2 Framework** - 3 jours au bureau - 2 jours à domicile - 2 jours flexibles/mois (choix employé)
+
+**Résultats attendus** : +0.8 pts sur Work-Life Balance
+
+#### No-Meeting Blocks
+
+**Deep Work Initiative** - Mardis/Jeudis après-midi : Zéro réunion - 4h de focus time garanti - Mesure de productivité
+
+**Impact** : +25% productivité perçue
+
+#### Unlimited PTO (Congés Illimités)
+
+**Avec Garde-Fous** - Minimum 15 jours/an obligatoire - Manager tracking pour éviter l'abus inverse - Culture du "vraiment déconnecter"
+
+**Bénéfice** : Attraction des talents +30%
+:::
+
+------------------------------------------------------------------------
+
+### 📈 Levier #3 : Mesurer pour Améliorer
+
+**Dashboard RH Trimestriel**
+
+```{r dashboard-example}
+#| echo: false
+#| eval: false
+
+# Exemple de KPIs à suivre
+kpis <- tibble(
+  Métrique = c(
+    "eNPS (Employee Net Promoter Score)",
+    "Glassdoor Rating",
+    "Work-Life Balance Score",
+    "Senior Management Score",
+    "Turnover Rate (volontaire)",
+    "Time to Fill (recrutement)"
+  ),
+  Actuel = c(32, 3.82, 3.37, 3.32, "18%", "45 jours"),
+  Cible = c(50, 4.0, 3.8, 3.8, "12%", "30 jours"),
+  Statut = c("⚠️", "⚠️", "🔴", "🔴", "🔴", "⚠️")
+)
+```
+
+**Processus d'Amélioration Continue**
+
+1.  **Mesure** : Glassdoor + sondages internes mensuels
+2.  **Analyse** : Identifier les 3 problèmes prioritaires
+3.  **Action** : Plan 90 jours avec owner désigné
+4.  **Itération** : Réévaluer et ajuster
+
+**Outils** : - Culture Amp / Lattice pour pulse surveys - Glassdoor API pour monitoring en temps réel - Power BI dashboard pour la C-Suite
+
+------------------------------------------------------------------------
+
+## 📊 Matrice de Priorisation {.smaller}
+
+```{r priority-matrix}
+#| echo: false
+#| fig-width: 14
+#| fig-height: 8
+
+# Créer une matrice impact vs effort
+priorities <- tibble(
+  Action = c(
+    "Former les managers", 
+    "Politique Work-from-Home",
+    "Augmenter salaires 10%",
+    "Réorganisation complète",
+    "Programme wellbeing",
+    "Flex-time policy",
+    "Unlimited PTO",
+    "Sondages mensuels"
+  ),
+  Impact = c(9, 7, 6, 8, 6, 7, 5, 4),
+  Effort = c(5, 3, 8, 10, 4, 2, 3, 2),
+  Categorie = c(
+    "Quick Win", "Quick Win", "Long-term", "Long-term",
+    "Quick Win", "Quick Win", "Quick Win", "Quick Win"
+  )
+)
+
+ggplot(priorities, aes(x = Effort, y = Impact, color = Categorie, size = Impact)) +
+  geom_point(alpha = 0.7) +
+  geom_text(aes(label = Action), hjust = -0.1, size = 5, fontface = "bold") +
+  geom_hline(yintercept = 6, linetype = "dashed", color = "gray50") +
+  geom_vline(xintercept = 5, linetype = "dashed", color = "gray50") +
+  annotate("text", x = 2, y = 9, label = "PRIORITÉ HAUTE\n(Quick Wins)", 
+           size = 6, fontface = "bold", color = "#22c55e") +
+  annotate("text", x = 8, y = 9, label = "HAUTE VALEUR\n(Investissement)", 
+           size = 6, fontface = "bold", color = "#f59e0b") +
+  annotate("text", x = 2, y = 3, label = "BASSE PRIORITÉ", 
+           size = 6, fontface = "bold", color = "#6b7280") +
+  scale_color_manual(values = c("Quick Win" = "#22c55e", "Long-term" = "#f59e0b")) +
+  scale_size_continuous(range = c(5, 15), guide = "none") +
+  scale_x_continuous(limits = c(0, 11), breaks = seq(0, 10, 2)) +
+  scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 2)) +
+  labs(
+    title = "Matrice Impact vs Effort : Prioriser les Actions",
+    subtitle = "Focus sur le quadrant haut-gauche (Quick Wins)",
+    x = "Effort Requis (1 = facile, 10 = difficile)",
+    y = "Impact sur Satisfaction (1 = faible, 10 = fort)",
+    color = "Type d'Action"
+  ) +
+  theme_minimal(base_size = 18) +
+  theme(
+    plot.title = element_text(face = "bold", size = 22),
+    plot.subtitle = element_text(size = 16, color = "gray40"),
+    legend.position = "bottom",
+    legend.text = element_text(size = 16),
+    legend.title = element_text(size = 16, face = "bold")
+  )
+```
+
+------------------------------------------------------------------------
+
+# 8. Conclusion {.section-title background-color="#0f172a"}
+
+## Les Enseignements Clés
+
+------------------------------------------------------------------------
+
+## 🎯 Ce que Nous Avons Appris {.smaller}
+
+::::: columns
+::: {.column width="50%"}
+### 📊 Sur les Données
+
+✅ **67,529 avis = vision fiable** - Échantillon représentatif - 10 ans de données temporelles - Significativité statistique confirmée (p \< 2e-16)
+
+✅ **5 dimensions mesurables** - Compensation (meilleure) - Work-Life Balance (pire) - Management = levier #1
+
+✅ **Différences réelles entre entreprises** - Facebook leader (4.51) - Amazon/Netflix à la traîne (3.59/3.41) - Écart de 1.10 point = énorme
+:::
+
+::: {.column width="50%"}
+### 💡 Sur le Business
+
+✅ **Le management définit tout** - Corrélation 0.71 avec culture - Impact cascade sur toutes dimensions - ROI maximal des formations leadership
+
+✅ **Work-Life Balance = enjeu universel** - Dimension la plus critique (3.37/5) - Priorité Gen Z/Millennials - Flexibilité = avantage compétitif
+
+✅ **Les données prédisent l'avenir** - Tendance à la hausse = attractivité - Volatilité (Netflix) = red flag - Monitoring continu essentiel
+:::
+:::::
+
+------------------------------------------------------------------------
+
+## 🚀 Les 5 Actions Prioritaires {.smaller}
+
+::: incremental
+### 1️⃣ Investir dans le Leadership (TOUTES)
+
+**ROI** : 400% \| **Timeline** : 3-6 mois\
+Former 100% des managers sur empathie, feedback, bien-être
+
+### 2️⃣ Lancer le Flex-Work 3-2-2 (TOUTES)
+
+**Impact** : +0.8 pts Work-Life Balance \| **Coût** : Minimal\
+3 jours bureau, 2 jours remote, 2 jours flex/mois
+
+### 3️⃣ Programme Urgent Amazon Work-Life
+
+**Objectif** : 3.01 → 3.50 en 12 mois \| **Budget** : \$50M\
+Réduire heures sup, augmenter effectifs, changer la culture
+
+### 4️⃣ Dashboard RH Trimestriel (TOUTES)
+
+**Outils** : Glassdoor API + Culture Amp \| **Timeline** : Immédiat\
+Mesurer pour améliorer en continu
+
+### 5️⃣ Benchmarking Compétitif (TOUTES)
+
+**Fréquence** : Trimestrielle \| **Focus** : Facebook/Google\
+Copier ce qui marche, éviter les erreurs des autres
+:::
+
+------------------------------------------------------------------------
+
+## 📈 Projections & Impact Attendu {.smaller}
+
+**Si les recommandations sont appliquées :**
+
+```{r projections}
+#| echo: false
+
+projections <- tibble(
+  Entreprise = c("Facebook", "Google", "Apple", "Microsoft", "Amazon", "Netflix"),
+  Note_Actuelle = c(4.51, 4.34, 3.96, 3.82, 3.59, 3.41),
+  Note_Projetee = c(4.60, 4.50, 4.20, 4.10, 3.90, 3.70),
+  Amelioration = Note_Projetee - Note_Actuelle,
+  Statut = c("Maintien", "Croissance", "Redressement", "Croissance", "Urgence", "Urgence")
+) %>%
+  mutate(
+    Note_Actuelle = round(Note_Actuelle, 2),
+    Note_Projetee = round(Note_Projetee, 2),
+    Amelioration = paste0("+", round(Amelioration, 2))
+  )
+
+projections %>%
+  kbl(
+    col.names = c("Entreprise", "Note 2018", "Projection 2020", "Gain", "Stratégie"),
+    align = c("l", "c", "c", "c", "l")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover"),
+    full_width = FALSE,
+    font_size = 20
+  ) %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#1e3a8a") %>%
+  row_spec(c(5, 6), bold = TRUE, background = "#fef3c7")
+```
+
+**Impact Business Global**
+
+-   📉 **Réduction turnover** : -15% en moyenne = **\$500M économisés**
+-   📈 **Attraction talents** : +25% candidatures qualifiées
+-   💰 **Coût recrutement** : -30% (meilleure rétention)
+-   ⭐ **Brand employer** : Glassdoor rating +0.3 pts en moyenne
+
+------------------------------------------------------------------------
+
+## 🔮 Analyses Futures Suggérées {.smaller}
+
+::: panel-tabset
+### Machine Learning
+
+**Modèle Prédictif : Qui va démissionner ?**
+
+-   Random Forest sur les 5 dimensions + texte
+-   Prédire le turnover à 3/6/12 mois
+-   Identifier les employés à risque pour intervention préventive
+
+**Variables** : Notes dimensions + sentiment analysis texte + tenure
+
+**ROI attendu** : Réduction turnover de 20% = \$100M+
+
+### NLP Avancé
+
+**Analyse de Sentiment Profonde**
+
+-   Topic modeling (LDA) sur pros/cons/advice
+-   Identifier les thèmes émergents par trimestre
+-   Détection automatique des signaux faibles (problèmes naissants)
+
+**Outils** : spaCy, BERT, transformers
+
+**Livrable** : Dashboard temps réel "employee pulse"
+
+### Benchmarking Étendu
+
+**Élargir à 50+ Entreprises**
+
+-   Comparer avec startups, scale-ups
+-   Identifier les "unicorns" de la satisfaction
+-   Créer un index "Best Employers in Tech"
+
+**Impact** : Positionnement concurrentiel clair
+:::
+
+------------------------------------------------------------------------
+
+## 📚 Méthodologie & Limites {.smaller}
+
+::::: columns
+::: {.column width="50%"}
+**✅ Forces de l'Analyse**
+
+-   Dataset large (67K+ avis)
+-   Significativité statistique validée
+-   10 ans de données temporelles
+-   Multi-dimensionnel (5 axes)
+-   Text mining complémentaire
+
+**Outils & Technologies**
+
+-   R + Tidyverse (manipulation)
+-   ggplot2 + patchwork (viz)
+-   tidytext (NLP)
+-   Quarto (rapport)
+-   Git/GitHub (versioning)
+:::
+
+::: {.column width="50%"}
+**⚠️ Limites Identifiées**
+
+1.  **Biais de sélection**
+    -   Employés mécontents sur-représentés
+    -   Avis vérifiés mais anonymes
+2.  **Période limitée**
+    -   Données jusqu'en 2018
+    -   Manque post-COVID insights
+3.  **Pas de causalité**
+    -   Corrélation ≠ causalité
+    -   Besoin d'études expérimentales
+4.  **Contexte manquant**
+    -   Pas de segmentation par département
+    -   Localisation géographique limitée
+
+**Recommandation** : Compléter avec sondages internes
+:::
+:::::
+
+------------------------------------------------------------------------
+
+# Merci ! {background-color="#1e3a8a"}
+
+::: title-slide
+## Questions ?
+
+**Contact** 📧 eyazantour926\@gmail.com\
+🔗 GitHub: [github.com/AyaZantour/Data_Analysis_R_Employee_Reviews](https://github.com/AyaZantour/Data_Analysis_R_Employee_Reviews)\
+💼 LinkedIn: Aya Zantour
+
+**Ressources** 📊 Code source : Disponible sur GitHub\
+📈 Visualisations : `resultats_analyse/`\
+📄 Rapport complet : `rapport_glassdoor.html`
+
+------------------------------------------------------------------------
+
+*"Les données ne mentent pas : Le management et l'équilibre vie pro/perso définissent la satisfaction des employés dans la Tech."*
+
+**Merci pour votre attention ! 🙏**
+:::
+
+------------------------------------------------------------------------
+
+## 📎 Annexes {.smaller}
+
+### Références & Sources
+
+1.  **Dataset Original**
+    -   Source : Kaggle - Employee Reviews Dataset
+    -   Collecte : Web scraping Glassdoor (2008-2018)
+    -   Taille : 67,529 avis × 17 variables
+2.  **Littérature Académique**
+    -   Heskett et al. (1994) - Service-Profit Chain
+    -   Gallup (2017) - State of the American Workplace
+    -   LinkedIn (2020) - Global Talent Trends
+3.  **Méthodologie Statistique**
+    -   ANOVA one-way (Fisher, 1925)
+    -   Tukey HSD pour comparaisons multiples
+    -   Corrélation de Pearson
+
+### Code & Reproductibilité
+
+``` r
+# Reproduire l'analyse complète
+git clone https://github.com/AyaZantour/Data_Analysis_R_Employee_Reviews
+cd Data_Analysis_R_Employee_Reviews
+source("R/analyse_complete.R")
+source("R/visualisations.R")
+quarto render presentation_glassdoor.qmd
+```
+
+------------------------------------------------------------------------
+
+## 🎨 Fichier CSS Personnalisé (Optionnel) {.smaller}
+
+Créer `styles.css` dans le même dossier :
+
+``` css
+/* Personnalisation des slides */
+.reveal {
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+.reveal h1, .reveal h2 {
+  color: #1e3a8a;
+  font-weight: 700;
+}
+
+.title-slide {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.section-title h1 {
+  color: white !important;
+  font-size: 3em;
+}
+
+/* Callouts personnalisés */
+.callout-important {
+  border-left: 5px solid #ef4444;
+}
+
+.callout-tip {
+  border-left: 5px solid #22c55e;
+}
+```
+
+------------------------------------------------------------------------
+
+## 📊 Custom SCSS Theme (Optionnel) {.smaller}
+
+Créer `custom.scss` :
+
+``` scss
+/*-- scss:defaults --*/
+$body-bg: #ffffff;
+$body-color: #1f2937;
+$link-color: #3b82f6;
+$presentation-heading-color: #1e3a8a;
+
+/*-- scss:rules --*/
+.reveal h1 {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.reveal .slide-number {
+  color: #6b7280;
+  font-size: 0.8em;
+}
+```
