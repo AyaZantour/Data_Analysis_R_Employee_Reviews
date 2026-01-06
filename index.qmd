@@ -21,8 +21,7 @@ execute:
   echo: true
   warning: false
   message: false
-  cache: true
-  
+  cache: false
 editor: visual
 ---
 
@@ -136,8 +135,17 @@ overview_stats %>%
 
 ## Répartition par Entreprise
 
-```         
+```` r
+````r
+```{r company-counts, echo=FALSE}
+company_counts <- df %>%
+  dplyr::count(company) %>%
+  dplyr::mutate(
+    pourcentage = n / sum(n),
+    pourcentage_fmt = scales::percent(pourcentage, accuracy = 0.1)
+  )
 ```
+````
 
 ```{r company-barplot, fig.cap="Répartition des avis par entreprise"}
 company_counts %>%
