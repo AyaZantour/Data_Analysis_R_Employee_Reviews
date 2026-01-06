@@ -19,9 +19,10 @@ R_Project/
 ├── R
 |   ├── analyse_complete.R        # Script d'analyse principal
 |   └── visualisations.R          # Script de génération des graphiques
-├── rapport_glassdoor.qmd         # Template Quarto
+├── index.qmd         # Template Quarto
 ├── resultats_analyse/            # Dossier créé automatiquement
 │   └── *.png                     # Visualisations
+├── quarto_presentation.qmd
 └── README.md                     # Ce fichier
 ```
 
@@ -340,7 +341,7 @@ quarto check
 # Télécharger la dernière version depuis quarto.org
 
 # Compiler avec options de debug
-quarto render rapport_glassdoor.qmd --verbose
+quarto render index.qmd --verbose
 ```
 
 ---
