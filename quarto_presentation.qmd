@@ -13,7 +13,7 @@ format:
     preview-links: auto
     logo: ""
     css: styles.css
-    footer: "Analyse Glassdoor - Projet Data Science"
+    footer: "Analyse Glassdoor - Projet R"
     width: 1600
     height: 900
     transition: slide
@@ -98,7 +98,7 @@ company_stats <- df %>%
 
 **`r format(overall_stats$total_reviews, big.mark = ",")` avis analysés** \| **`r overall_stats$companies` entreprises** \| **Période : 2008-2018**
 
-Votre Nom \| Projet Data Science
+Eya Zantour \| Projet R
 
 Date: `r format(Sys.Date(), "%d %B %Y")`
 :::
@@ -134,7 +134,7 @@ Date: `r format(Sys.Date(), "%d %B %Y")`
 **Approche**
 
 -   Analyse quantitative de `r format(overall_stats$total_reviews, big.mark = ",")` avis
--   6 entreprises majeures (FAAMG)
+-   6 entreprises majeures (FAAMG+Netflix)
 -   5 dimensions de satisfaction mesurées
 -   Période : 2008-2018 (10 ans de données)
 :::
@@ -932,88 +932,4 @@ trend_summary %>%
 
 ------------------------------------------------------------------------
 
-## 📎 Annexes {.smaller}
-
-### Références & Sources
-
-1.  **Dataset Original**
-    -   Source : Glassdoor - Employee Reviews Dataset
-    -   Taille : 67,529 avis × 17 variables
-2.  **Méthodologie Statistique**
-    -   ANOVA one-way (Fisher, 1925)
-    -   Tukey HSD pour comparaisons multiples
-    -   Corrélation de Pearson
-
-### Code & Reproductibilité
-
-``` r
-# Reproduire l'analyse complète
-git clone https://github.com/AyaZantour/Data_Analysis_R_Employee_Reviews
-cd Data_Analysis_R_Employee_Reviews
-source("R/analyse_complete.R")
-source("R/visualisations.R")
-quarto render presentation_glassdoor.qmd
-```
-
-------------------------------------------------------------------------
-
-## 🎨 Fichier CSS Personnalisé (Optionnel) {.smaller}
-
-Créer `styles.css` dans le même dossier :
-
-``` css
-/* Personnalisation des slides */
-.reveal {
-  font-family: 'Inter', 'Segoe UI', sans-serif;
-}
-
-.reveal h1, .reveal h2 {
-  color: #1e3a8a;
-  font-weight: 700;
-}
-
-.title-slide {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.section-title h1 {
-  color: white !important;
-  font-size: 3em;
-}
-
-/* Callouts personnalisés */
-.callout-important {
-  border-left: 5px solid #ef4444;
-}
-
-.callout-tip {
-  border-left: 5px solid #22c55e;
-}
-```
-
-------------------------------------------------------------------------
-
-## 📊 Custom SCSS Theme (Optionnel) {.smaller}
-
-Créer `custom.scss` :
-
-``` scss
-/*-- scss:defaults --*/
-$body-bg: #ffffff;
-$body-color: #1f2937;
-$link-color: #3b82f6;
-$presentation-heading-color: #1e3a8a;
-
-/*-- scss:rules --*/
-.reveal h1 {
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.reveal .slide-number {
-  color: #6b7280;
-  font-size: 0.8em;
-}
-```
+##  {.smaller}
