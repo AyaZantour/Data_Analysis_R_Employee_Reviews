@@ -151,7 +151,7 @@ Date: `r format(Sys.Date(), "%d %B %Y")`
 **Outils**
 
 -   R + Tidyverse
--   ggplot2
+-   ggplot2 + patchwork
 -   Quarto pour le rapport
 :::
 :::::

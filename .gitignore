@@ -247,4 +247,4 @@ config.local.*
 
 # Fichiers essentiels au projet
 !img/**  # On garde toutes les images
-!R/*.R   # On garde les scripts R
+!R/*.R   # On garde les scripts R"index_cache/" 

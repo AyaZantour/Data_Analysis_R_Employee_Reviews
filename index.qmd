@@ -22,6 +22,7 @@ execute:
   warning: false
   message: false
   cache: true
+  
 editor: visual
 ---
 
@@ -627,7 +628,7 @@ cat("- Nombre d'avis:", format(worst_company$n_avis, big.mark = ","), "\n")
 cat("- Points d'amélioration prioritaires: Senior Management, Work-Life Balance\n")
 ```
 
-```{}
+```         
 ```
 :::
 
